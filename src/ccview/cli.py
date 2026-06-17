@@ -41,6 +41,7 @@ def main(
 
     _setup_logging(verbose)
 
+    from ccview.db import DB
     from ccview.model import Store
     from ccview.server import build_app, find_free_port
     from ccview.watcher import Watcher
@@ -51,7 +52,10 @@ def main(
         raise typer.Exit(1)
 
     actual_port = port if port else find_free_port()
+    db = DB(cfg.db_path(claude_dir))
     store = Store()
+    db.load_into(store)
+    store.subscribe(db.on_delta)
     watcher = Watcher(projects_dir=projects, store=store, poll=poll)
     fastapi_app = build_app(store)
 
@@ -91,6 +95,7 @@ def main(
             )
         finally:
             _cleanup()
+            db.close()
 
     asyncio.run(_run())
 
