@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 from starlette.responses import Response
@@ -85,6 +85,13 @@ def build_app(store: Store) -> FastAPI:
         finally:
             if websocket in clients:
                 clients.remove(websocket)
+
+    @app.get("/api/sessions/{session_id}")
+    async def get_session_full(session_id: str) -> Response:
+        session = store.get_session(session_id)
+        if session is None:
+            return Response(status_code=404)
+        return JSONResponse(session.to_full_dict())
 
     # Serve built SPA if present, else a minimal fallback
     if WEB_DIR.exists() and (WEB_DIR / "index.html").exists():

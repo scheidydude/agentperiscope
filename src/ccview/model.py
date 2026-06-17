@@ -86,6 +86,11 @@ class Agent:
             "child_ids": self.child_ids,
         }
 
+    def to_full_dict(self) -> dict:
+        d = self.to_dict()
+        d["events"] = [_event_dict(e) for e in self.events]
+        return d
+
 
 @dataclass
 class Session:
@@ -111,6 +116,11 @@ class Session:
             "last_activity_ts": self.last_activity_ts,
             "agents": {k: v.to_dict() for k, v in self.agents.items()},
         }
+
+    def to_full_dict(self) -> dict:
+        d = self.to_dict()
+        d["agents"] = {k: v.to_full_dict() for k, v in self.agents.items()}
+        return d
 
 
 # ---------------------------------------------------------------------------

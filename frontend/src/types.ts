@@ -6,6 +6,17 @@ export interface TokenCounts {
   total: number
 }
 
+export interface EventState {
+  id: string
+  agent_id: string
+  ts: string
+  kind: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'usage' | 'system'
+  tool_name: string | null
+  summary: string | null
+  tokens_in: number | null
+  tokens_out: number | null
+}
+
 export interface AgentState {
   id: string
   session_id: string
@@ -19,6 +30,7 @@ export interface AgentState {
   last_text: string | null
   tokens: TokenCounts
   child_ids: string[]
+  events?: EventState[]
 }
 
 export interface SessionState {

@@ -39,9 +39,9 @@ export function SessionView({ session }: Props) {
 
       {/* Agent lane grid */}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
-        {rootAgent && <AgentCard agent={rootAgent} isRoot />}
+        {rootAgent && <AgentCard agent={rootAgent} isRoot sessionId={session.id} />}
         {subagents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} />
+          <AgentCard key={agent.id} agent={agent} sessionId={session.id} />
         ))}
       </div>
     </div>
