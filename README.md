@@ -34,7 +34,7 @@ Opens `http://127.0.0.1:<auto-port>` in your browser. Binds loopback only — ne
 Hooks give ccview instant notification when agents start/stop rather than waiting for the next file-change event:
 
 ```sh
-ccview install-hooks          # global: ~/.claude/settings.json
+ccview install-hooks            # global: ~/.claude/settings.json
 ccview install-hooks --project  # project: ./.claude/settings.json
 ```
 
@@ -46,13 +46,50 @@ ccview uninstall-hooks
 
 The install writes `ccview hook` as the hook command. That subcommand reads the hook JSON from stdin and POSTs it to the local server, then exits immediately — it never blocks Claude Code.
 
+## Features
+
+### Live agent view
+
+Sessions appear as cards. Each card shows a grid of agent lanes — one per subagent plus the root agent. Each lane shows:
+
+- Status dot (pulsing blue = running, green = done, red = error)
+- Agent type and description
+- Current tool in use
+- Last text output
+- Token breakdown: input / output / cache reads / cache writes
+
+### Active and History
+
+- **Active** — sessions with at least one running agent. Always shown, even when empty. Defaults open.
+- **History** — completed sessions, loaded from SQLite on startup so they survive server restarts. Defaults closed.
+
+Both sections are collapsible and show item counts. Sessions are sorted newest-first.
+
+### Search
+
+Type in the search bar to filter sessions across Active and History. Matches against working directory, project slug, agent descriptions, and last text output. No server round-trip — all sessions are in the browser on connect.
+
+### Expand and pop out
+
+Click **▼** on any agent card to expand an inline event log (text, tool calls, thinking blocks with timestamps). When expanded, click **⤢ pop out** to open a full modal with:
+
+- Scrollable event list with full text (no truncation)
+- Agent metadata: type, description, status, start/end times
+- Token breakdown
+- Event count
+
+Click outside the modal or **✕** to close. Events are fetched once and reused for both views.
+
 ## Architecture
 
 ```
 ~/.claude/projects/<slug>/<session-id>.jsonl          ← tailed by watcher
 ~/.claude/projects/<slug>/<session-id>/subagents/     ← subagent transcripts
+~/.claude/ccview.db                                   ← SQLite history (sessions + agents)
+~/.claude/ccview.port                                 ← auto-detected port for hook subcommand
 settings.json hooks → ccview hook → POST /events      ← instant lifecycle events
 FastAPI 127.0.0.1:<port>  /ws → browser WebSocket     ← live push
+GET /api/sessions/{id}                                ← full session with events (on demand)
 ```
 
 ## WSL note
@@ -74,6 +111,8 @@ Run these on each OS (macOS verified; Windows/Linux manual):
 - [ ] `ccview install-hooks` writes correct settings.json; hooks fire in next session
 - [ ] `ccview hook` exits fast (<50ms) even when server is down
 - [ ] `--poll` mode works in environments without inotify/FSEvents
+- [ ] History persists across server restarts (`~/.claude/ccview.db`)
+- [ ] Completed sessions from prior run appear in History, not Active
 
 ## Development
 
@@ -86,6 +125,7 @@ uv run pytest
 cd frontend
 npm install
 npm run build   # → src/ccview/web/
-# or for dev with HMR (start ccview on port 7821 first):
+# or for dev with HMR (start ccview on a fixed port first):
+uv run ccview --port 7821 --no-open &
 npm run dev
 ```
