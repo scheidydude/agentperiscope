@@ -151,19 +151,7 @@ class Watcher:
                 continue
             root = session.agents.get(session_id)
             if root and root.status == "running":
-                if not session.last_activity_ts:
-                    root.status = "done"
-                    session.status = "done"
-                else:
-                    try:
-                        last_ts = datetime.fromisoformat(
-                            session.last_activity_ts.replace("Z", "+00:00")
-                        )
-                        if (now - last_ts).total_seconds() > 3600:
-                            root.status = "done"
-                            session.status = "done"
-                    except (ValueError, TypeError):
-                        pass
+                self._reconcile_one_root(path, root, session, now)
 
         # --- async subagents (async_launched → running, may now be done) ---
         for path, meta in self._subagent_meta.items():
@@ -175,6 +163,38 @@ class Watcher:
             if not agent or agent.status == "done":
                 continue
             self._reconcile_one_subagent(path, agent, now_ts)
+
+    def _reconcile_one_root(
+        self, path: Path, root: "Agent", session: "Session", now: datetime  # type: ignore[name-defined]
+    ) -> None:
+        """Read tail of root JSONL; mark done on end_turn or 1h staleness fallback."""
+        tail = _read_tail_lines(path)
+        for line_bytes in reversed(tail):
+            parsed = parse_line(line_bytes)
+            if isinstance(parsed, AssistantLine):
+                if parsed.stop_reason == "end_turn":
+                    root.status = "done"
+                    root.current_tool = None
+                    session.status = "done"
+                # else: mid-turn stop — fall through to time-based check
+                break
+        else:
+            # No AssistantLine at all — metadata-only session
+            if not session.last_activity_ts:
+                root.status = "done"
+                session.status = "done"
+                return
+
+        if root.status == "running" and session.last_activity_ts:
+            try:
+                last_ts = datetime.fromisoformat(
+                    session.last_activity_ts.replace("Z", "+00:00")
+                )
+                if (now - last_ts).total_seconds() > 3600:
+                    root.status = "done"
+                    session.status = "done"
+            except (ValueError, TypeError):
+                pass
 
     def _reconcile_one_subagent(self, path: Path, agent: "Agent", now_ts: float) -> None:  # type: ignore[name-defined]
         """Read tail of subagent JSONL to determine if it finished."""
