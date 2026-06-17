@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from ccview.transcripts import (
+from agentperiscope.transcripts import (
     AnyLine,
     AssistantLine,
     ContentBlock,
@@ -24,7 +24,7 @@ class TokenCounts:
     cache_creation: int = 0
     cache_read: int = 0
 
-    def add_usage(self, u: "ccview.transcripts.UsageBlock") -> None:  # type: ignore[name-defined]
+    def add_usage(self, u: "agentperiscope.transcripts.UsageBlock") -> None:  # type: ignore[name-defined]
         self.input += u.input_tokens
         self.output += u.output_tokens
         self.cache_creation += u.cache_creation_input_tokens

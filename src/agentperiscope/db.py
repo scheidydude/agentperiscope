@@ -1,4 +1,4 @@
-"""SQLite persistence for ccview sessions."""
+"""SQLite persistence for agentperiscope sessions."""
 from __future__ import annotations
 
 import sqlite3
@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ccview.model import Store
+    from agentperiscope.model import Store
 
 _DDL = """\
 CREATE TABLE IF NOT EXISTS sessions (
@@ -47,7 +47,7 @@ class DB:
         self._conn.commit()
 
     def load_into(self, store: "Store") -> None:
-        from ccview.model import Agent, Session, TokenCounts
+        from agentperiscope.model import Agent, Session, TokenCounts
 
         for row in self._conn.execute("SELECT * FROM sessions").fetchall():
             session = Session(

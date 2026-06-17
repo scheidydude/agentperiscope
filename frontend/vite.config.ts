@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
-    outDir: '../src/ccview/web',
+    outDir: '../src/agentperiscope/web',
     emptyOutDir: true,
   },
   server: {

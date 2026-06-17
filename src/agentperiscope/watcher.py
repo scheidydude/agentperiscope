@@ -10,8 +10,8 @@ from pathlib import Path
 
 from watchfiles import awatch, Change
 
-from ccview.model import Store
-from ccview.transcripts import Tailer, AssistantLine, UserLine, parse_line
+from agentperiscope.model import Store
+from agentperiscope.transcripts import Tailer, AssistantLine, UserLine, parse_line
 
 log = logging.getLogger(__name__)
 

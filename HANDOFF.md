@@ -1,8 +1,8 @@
-# HANDOFF — ccview (2026-06-17)
+# HANDOFF — agentperiscope (2026-06-17)
 
 ## 1. Mission
 
-`ccview` is a local live viewer for Claude Code subagent activity. It tails CC session transcripts, listens to lifecycle hooks, and renders a per-agent lane view in the browser at `127.0.0.1`. Phase 1 (MVP) and Phase 2 (history + search + expand + modal + stale-session fix + collapsible sections) are complete. Phase 3 scope is TBD — ask the user.
+`agentperiscope` is a local live viewer for Claude Code subagent activity. It tails CC session transcripts, listens to lifecycle hooks, and renders a per-agent lane view in the browser at `127.0.0.1`. Phase 1 (MVP) and Phase 2 (history + search + expand + modal + stale-session fix + collapsible sections) are complete. Phase 3 scope is TBD — ask the user.
 
 ---
 
@@ -11,8 +11,8 @@
 ### Committed and working (9 commits on `main`)
 
 - `cd32df6` — Phase 1 MVP: watcher, parser, in-memory store, FastAPI server, React SPA, CLI, hooks, 18 tests
-- `10f6cbd` — Hook port fix: `~/.claude/ccview.port` auto-discovery
-- `90d48a2` — Phase 2a: SQLite persistence — `~/.claude/ccview.db`, survives restarts
+- `10f6cbd` — Hook port fix: `~/.claude/agentperiscope.port` auto-discovery
+- `90d48a2` — Phase 2a: SQLite persistence — `~/.claude/agentperiscope.db`, survives restarts
 - `d479042` — Phase 2b: client-side search bar (cwd, project_slug, description, last_text)
 - `e2522f0` — Phase 2c: AgentCard expand + token breakdown (in/out/cache_read/cache_creation)
 - `eff184c` — fix: root session completion detected via JSONL tail on boot (`end_turn` check)
@@ -21,9 +21,9 @@
 - `59f1c6c` — feat: pop-out modal for agent event details
 
 **Verified working:**
-- `uv run ccview` launches, opens browser
+- `uv run agentperiscope` launches, opens browser
 - Active (always shown, defaults open) / History (defaults closed) sections collapsible with counts
-- Sessions that ended while ccview was down correctly appear in History on next boot
+- Sessions that ended while agentperiscope was down correctly appear in History on next boot
 - SQLite history survives restart
 - Search bar filters live
 - AgentCard ▼/▲ expands inline event list (scrollable, max 48 rows)
@@ -61,10 +61,10 @@ Ask user what Phase 3 should be.
 - **Reversibility:** Easy — `App.tsx`.
 
 **Decision:** Detect root session completion via JSONL tail read on boot
-- **Reason:** Sessions that ended while ccview was down would stay "running" for up to an hour. Reads last AssistantLine; if `stop_reason == "end_turn"` → immediately done. 1-hour fallback retained for mid-turn kills.
+- **Reason:** Sessions that ended while agentperiscope was down would stay "running" for up to an hour. Reads last AssistantLine; if `stop_reason == "end_turn"` → immediately done. 1-hour fallback retained for mid-turn kills.
 - **Reversibility:** Easy — `watcher.py:_reconcile_one_root`.
 
-**Decision:** SQLite at `~/.claude/ccview.db`, DB subscriber on Store delta stream
+**Decision:** SQLite at `~/.claude/agentperiscope.db`, DB subscriber on Store delta stream
 - **Reason:** State files under `claude_dir`. DB is a side-effect layer; Store stays pure in-memory.
 - **Reversibility:** Easy.
 
@@ -84,11 +84,11 @@ Ask user what Phase 3 should be.
 
 ## 4. Architecture & Key Files
 
-### Python (`src/ccview/`)
+### Python (`src/agentperiscope/`)
 
 | File | Purpose |
 |---|---|
-| `config.py` | Resolves Claude config dir. `db_path()` returns `~/.claude/ccview.db`. |
+| `config.py` | Resolves Claude config dir. `db_path()` returns `~/.claude/agentperiscope.db`. |
 | `db.py` | `DB` class: SQLite schema, `load_into`, `on_delta`, upsert helpers. |
 | `model.py` | `Store` + `Session`/`Agent`/`Event`. `to_full_dict()` on Agent/Session includes events (REST only). |
 | `server.py` | FastAPI. `GET /api/sessions/{id}` registered before SPA mount. |
@@ -108,7 +108,7 @@ Ask user what Phase 3 should be.
 | `useStore.ts` | Unchanged. |
 
 ### Built output
-- `src/ccview/web/` — committed. Rebuild: `cd frontend && npm run build`.
+- `src/agentperiscope/web/` — committed. Rebuild: `cd frontend && npm run build`.
 
 ### Tests
 - `tests/test_transcripts.py`, `tests/test_model.py` — 18 tests, all pass.
@@ -144,8 +144,8 @@ Ask user what Phase 3 should be.
 
 ## 6. Conventions In Play
 
-- **Python 3.12, `uv` toolchain, hatchling.** `uv sync` → `uv run ccview`. Tests: `uv run pytest tests/ -q`. sqlite3 is stdlib.
-- **Frontend:** React + Vite + TypeScript + Tailwind. `cd frontend && npm run build` → `src/ccview/web/`. Built output committed in the wheel.
+- **Python 3.12, `uv` toolchain, hatchling.** `uv sync` → `uv run agentperiscope`. Tests: `uv run pytest tests/ -q`. sqlite3 is stdlib.
+- **Frontend:** React + Vite + TypeScript + Tailwind. `cd frontend && npm run build` → `src/agentperiscope/web/`. Built output committed in the wheel.
 - **No raw content persisted.** `last_text` = 200-char snippet; `summary` = truncated. Full transcript stays in JSONL.
 - **Schema drift tolerance.** Unknown line types → `UnknownLine`. Never crash on parse.
 - **No comments unless WHY is non-obvious.**
@@ -171,7 +171,7 @@ Ask user what Phase 3 should be.
 
 ## 8. Do Not Touch
 
-- `src/ccview/web/` — generated. Edit `frontend/src/`, then rebuild.
+- `src/agentperiscope/web/` — generated. Edit `frontend/src/`, then rebuild.
 - Boot scan ordering in `watcher.py:_boot_scan` — load-bearing for completion tracking.
 - `async_launched` → `"running"` in `model.py:apply_line` — correct, hard-won.
 - `ensure_session` cwd update block — removing makes metadata-only-start sessions permanently invisible.

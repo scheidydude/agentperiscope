@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ccview.transcripts import (
+from agentperiscope.transcripts import (
     AssistantLine,
     SystemLine,
     UnknownLine,

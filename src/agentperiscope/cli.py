@@ -1,4 +1,4 @@
-"""ccview CLI entry point."""
+"""agentperiscope CLI entry point."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Annotated, Optional
 import typer
 import uvicorn
 
-from ccview import config as cfg
+from agentperiscope import config as cfg
 
 app = typer.Typer(help="Local live viewer for Claude Code subagent activity.")
 
@@ -41,10 +41,10 @@ def main(
 
     _setup_logging(verbose)
 
-    from ccview.db import DB
-    from ccview.model import Store
-    from ccview.server import build_app, find_free_port
-    from ccview.watcher import Watcher
+    from agentperiscope.db import DB
+    from agentperiscope.model import Store
+    from agentperiscope.server import build_app, find_free_port
+    from agentperiscope.watcher import Watcher
 
     projects = cfg.projects_dir(claude_dir)
     if not projects.exists():
@@ -60,10 +60,10 @@ def main(
     fastapi_app = build_app(store)
 
     url = f"http://127.0.0.1:{actual_port}"
-    typer.echo(f"ccview listening on {url}")
+    typer.echo(f"agentperiscope listening on {url}")
     typer.echo(f"watching: {projects}")
 
-    port_file = cfg.claude_dir(claude_dir) / "ccview.port"
+    port_file = cfg.claude_dir(claude_dir) / "agentperiscope.port"
 
     async def _run() -> None:
         uv_config = uvicorn.Config(
@@ -106,10 +106,10 @@ def main(
 
 @app.command("hook")
 def hook_cmd(
-    port: Annotated[Optional[int], typer.Option("--port", help="ccview server port (auto-detected if omitted)")] = None,
+    port: Annotated[Optional[int], typer.Option("--port", help="agentperiscope server port (auto-detected if omitted)")] = None,
 ) -> None:
-    """Read hook JSON from stdin and POST to the local ccview server."""
-    from ccview.hooks import handle_hook
+    """Read hook JSON from stdin and POST to the local agentperiscope server."""
+    from agentperiscope.hooks import handle_hook
     handle_hook(port)
 
 
@@ -122,14 +122,14 @@ def install_hooks_cmd(
     global_: Annotated[bool, typer.Option("--global", "-g", help="Install in global ~/.claude/settings.json")] = False,
     project: Annotated[bool, typer.Option("--project", "-p", help="Install in ./.claude/settings.json")] = False,
     claude_dir: Annotated[Optional[str], typer.Option("--claude-dir")] = None,
-    ccview_bin: Annotated[Optional[str], typer.Option("--ccview-bin", help="Path to ccview binary")] = None,
+    bin_override: Annotated[Optional[str], typer.Option("--bin", help="Path to agentperiscope binary")] = None,
 ) -> None:
-    """Add ccview hooks to Claude Code settings.json (idempotent)."""
-    from ccview.hooks import install_hooks
+    """Add agentperiscope hooks to Claude Code settings.json (idempotent)."""
+    from agentperiscope.hooks import install_hooks
 
     paths = _resolve_settings_paths(global_, project, claude_dir)
     for p in paths:
-        install_hooks(p, ccview_bin)
+        install_hooks(p, bin_override)
 
 
 @app.command("uninstall-hooks")
@@ -138,8 +138,8 @@ def uninstall_hooks_cmd(
     project: Annotated[bool, typer.Option("--project", "-p")] = False,
     claude_dir: Annotated[Optional[str], typer.Option("--claude-dir")] = None,
 ) -> None:
-    """Remove ccview hooks from Claude Code settings.json."""
-    from ccview.hooks import uninstall_hooks
+    """Remove agentperiscope hooks from Claude Code settings.json."""
+    from agentperiscope.hooks import uninstall_hooks
 
     paths = _resolve_settings_paths(global_, project, claude_dir)
     for p in paths:

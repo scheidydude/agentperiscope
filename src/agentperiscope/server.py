@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ccview.model import Store
+from agentperiscope.model import Store
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def find_free_port() -> int:
 
 
 def build_app(store: Store) -> FastAPI:
-    app = FastAPI(title="ccview")
+    app = FastAPI(title="agentperiscope")
     clients: list[WebSocket] = []
 
     def _broadcast(delta: dict) -> None:
@@ -108,7 +108,7 @@ _FALLBACK_HTML = """<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ccview</title>
+  <title>agentperiscope</title>
   <style>
     body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; }
     h1 { color: #58a6ff; }
@@ -120,7 +120,7 @@ _FALLBACK_HTML = """<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>ccview</h1>
+  <h1>agentperiscope</h1>
   <div id="status">connecting…</div>
   <div id="sessions"></div>
   <script>

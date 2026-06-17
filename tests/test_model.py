@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from ccview.model import Store
-from ccview.transcripts import parse_line, RawRef
+from agentperiscope.model import Store
+from agentperiscope.transcripts import parse_line, RawRef
 
 
 def _ref(path: str = "/tmp/fake.jsonl", offset: int = 0) -> RawRef:

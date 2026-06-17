@@ -16,4 +16,4 @@ def projects_dir(override: str | None = None) -> Path:
 
 
 def db_path(override: str | None = None) -> Path:
-    return claude_dir(override) / "ccview.db"
+    return claude_dir(override) / "agentperiscope.db"

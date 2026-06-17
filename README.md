@@ -1,4 +1,4 @@
-# ccview
+# agentperiscope
 
 Local live viewer for Claude Code subagent activity. Tails session transcripts and listens to lifecycle hooks, then renders a live per-agent view in the browser.
 
@@ -7,7 +7,7 @@ Local live viewer for Claude Code subagent activity. Tails session transcripts a
 ```sh
 uv tool install .
 # or for ephemeral use:
-uvx --from . ccview
+uvx --from . agentperiscope
 ```
 
 Requires Python 3.12+. No Node required at runtime — the built React SPA is bundled in the wheel.
@@ -15,7 +15,7 @@ Requires Python 3.12+. No Node required at runtime — the built React SPA is bu
 ## Run
 
 ```sh
-ccview
+agentperiscope
 ```
 
 Opens `http://127.0.0.1:<auto-port>` in your browser. Binds loopback only — never `0.0.0.0`.
@@ -31,20 +31,20 @@ Opens `http://127.0.0.1:<auto-port>` in your browser. Binds loopback only — ne
 
 ## Wire up hooks (recommended)
 
-Hooks give ccview instant notification when agents start/stop rather than waiting for the next file-change event:
+Hooks give agentperiscope instant notification when agents start/stop rather than waiting for the next file-change event:
 
 ```sh
-ccview install-hooks            # global: ~/.claude/settings.json
-ccview install-hooks --project  # project: ./.claude/settings.json
+agentperiscope install-hooks            # global: ~/.claude/settings.json
+agentperiscope install-hooks --project  # project: ./.claude/settings.json
 ```
 
 To remove:
 
 ```sh
-ccview uninstall-hooks
+agentperiscope uninstall-hooks
 ```
 
-The install writes `ccview hook` as the hook command. That subcommand reads the hook JSON from stdin and POSTs it to the local server, then exits immediately — it never blocks Claude Code.
+The install writes `agentperiscope hook` as the hook command. That subcommand reads the hook JSON from stdin and POSTs it to the local server, then exits immediately — it never blocks Claude Code.
 
 ## Features
 
@@ -85,33 +85,33 @@ Click outside the modal or **✕** to close. Events are fetched once and reused 
 ```
 ~/.claude/projects/<slug>/<session-id>.jsonl          ← tailed by watcher
 ~/.claude/projects/<slug>/<session-id>/subagents/     ← subagent transcripts
-~/.claude/ccview.db                                   ← SQLite history (sessions + agents)
-~/.claude/ccview.port                                 ← auto-detected port for hook subcommand
-settings.json hooks → ccview hook → POST /events      ← instant lifecycle events
+~/.claude/agentperiscope.db                                   ← SQLite history (sessions + agents)
+~/.claude/agentperiscope.port                                 ← auto-detected port for hook subcommand
+settings.json hooks → agentperiscope hook → POST /events      ← instant lifecycle events
 FastAPI 127.0.0.1:<port>  /ws → browser WebSocket     ← live push
 GET /api/sessions/{id}                                ← full session with events (on demand)
 ```
 
 ## WSL note
 
-Claude Code on native Windows writes to `%USERPROFILE%\.claude`; Claude Code inside WSL writes to the Linux `~/.claude`. These are separate installs. Use `--claude-dir` to point ccview at whichever one you're running:
+Claude Code on native Windows writes to `%USERPROFILE%\.claude`; Claude Code inside WSL writes to the Linux `~/.claude`. These are separate installs. Use `--claude-dir` to point agentperiscope at whichever one you're running:
 
 ```sh
 # From inside WSL, watching the Windows-side transcripts:
-ccview --claude-dir /mnt/c/Users/YourName/.claude
+agentperiscope --claude-dir /mnt/c/Users/YourName/.claude
 ```
 
 ## Cross-platform test checklist
 
 Run these on each OS (macOS verified; Windows/Linux manual):
 
-- [ ] `ccview` resolves config dir correctly (`--claude-dir` override works)
+- [ ] `agentperiscope` resolves config dir correctly (`--claude-dir` override works)
 - [ ] Browser opens automatically; `--no-open` suppresses it
 - [ ] Server binds `127.0.0.1` (verify with `netstat -an | grep <port>`)
-- [ ] `ccview install-hooks` writes correct settings.json; hooks fire in next session
-- [ ] `ccview hook` exits fast (<50ms) even when server is down
+- [ ] `agentperiscope install-hooks` writes correct settings.json; hooks fire in next session
+- [ ] `agentperiscope hook` exits fast (<50ms) even when server is down
 - [ ] `--poll` mode works in environments without inotify/FSEvents
-- [ ] History persists across server restarts (`~/.claude/ccview.db`)
+- [ ] History persists across server restarts (`~/.claude/agentperiscope.db`)
 - [ ] Completed sessions from prior run appear in History, not Active
 
 ## Development
@@ -124,8 +124,8 @@ uv run pytest
 # Frontend
 cd frontend
 npm install
-npm run build   # → src/ccview/web/
-# or for dev with HMR (start ccview on a fixed port first):
-uv run ccview --port 7821 --no-open &
+npm run build   # → src/agentperiscope/web/
+# or for dev with HMR (start agentperiscope on a fixed port first):
+uv run agentperiscope --port 7821 --no-open &
 npm run dev
 ```

@@ -17,8 +17,8 @@ def _resolve_port(port: int | None, claude_dir: Path | None = None) -> int | Non
     """Return port from explicit arg, port file, or None if server not running."""
     if port:
         return port
-    from ccview import config as cfg
-    port_file = cfg.claude_dir(str(claude_dir) if claude_dir else None) / "ccview.port"
+    from agentperiscope import config as cfg
+    port_file = cfg.claude_dir(str(claude_dir) if claude_dir else None) / "agentperiscope.port"
     try:
         return int(port_file.read_text().strip())
     except (OSError, ValueError):
@@ -50,20 +50,16 @@ def handle_hook(port: int | None = None) -> None:
     sys.exit(0)
 
 
-def _hook_command(ccview_path: str) -> str:
+def _hook_command(bin_path: str) -> str:
     """Generate OS-appropriate hook command string."""
-    import platform
-    system = platform.system()
-    if system == "Windows":
-        return f'"{ccview_path}" hook'
-    return f'"{ccview_path}" hook'
+    return f'"{bin_path}" hook'
 
 
-def _find_ccview_bin() -> str:
-    """Return the path to the installed ccview binary."""
+def _find_bin() -> str:
+    """Return the path to the installed agentperiscope binary."""
     import shutil
-    found = shutil.which("ccview")
-    return found or "ccview"
+    found = shutil.which("agentperiscope")
+    return found or "agentperiscope"
 
 
 def _load_settings(path: Path) -> dict:
@@ -80,12 +76,12 @@ def _save_settings(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-_CCVIEW_MARKER = "ccview"
+_MARKER = "agentperiscope"
 
 
-def install_hooks(settings_path: Path, ccview_bin: str | None = None) -> None:
-    """Idempotently merge ccview hooks into settings_path."""
-    bin_path = ccview_bin or _find_ccview_bin()
+def install_hooks(settings_path: Path, bin_override: str | None = None) -> None:
+    """Idempotently merge agentperiscope hooks into settings_path."""
+    bin_path = bin_override or _find_bin()
     cmd = _hook_command(bin_path)
 
     data = _load_settings(settings_path)
@@ -96,7 +92,7 @@ def install_hooks(settings_path: Path, ccview_bin: str | None = None) -> None:
         handlers: list = hooks.setdefault(event, [])
         already = any(
             any(
-                isinstance(h, dict) and _CCVIEW_MARKER in h.get("command", "")
+                isinstance(h, dict) and _MARKER in h.get("command", "")
                 for h in entry.get("hooks", [])
             )
             for entry in handlers
@@ -116,7 +112,7 @@ def install_hooks(settings_path: Path, ccview_bin: str | None = None) -> None:
 
 
 def uninstall_hooks(settings_path: Path) -> None:
-    """Remove all ccview hook entries from settings_path."""
+    """Remove all agentperiscope hook entries from settings_path."""
     if not settings_path.exists():
         return
     data = _load_settings(settings_path)
@@ -133,7 +129,7 @@ def uninstall_hooks(settings_path: Path) -> None:
             inner = entry.get("hooks", [])
             cleaned = [
                 h for h in inner
-                if not (isinstance(h, dict) and _CCVIEW_MARKER in h.get("command", ""))
+                if not (isinstance(h, dict) and _MARKER in h.get("command", ""))
             ]
             if cleaned:
                 new_handlers.append({**entry, "hooks": cleaned})
@@ -145,7 +141,6 @@ def uninstall_hooks(settings_path: Path) -> None:
         if len(new_handlers) != len(handlers):
             changed = True
         hooks[event] = new_handlers
-        # prune empty event keys
         if not hooks[event]:
             del hooks[event]
             changed = True
@@ -154,4 +149,4 @@ def uninstall_hooks(settings_path: Path) -> None:
         _save_settings(settings_path, data)
         print(f"hooks removed from {settings_path}")
     else:
-        print(f"no ccview hooks found in {settings_path}")
+        print(f"no agentperiscope hooks found in {settings_path}")
