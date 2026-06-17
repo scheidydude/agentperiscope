@@ -3,6 +3,39 @@ import { useStore } from './useStore'
 import { SessionView } from './SessionView'
 import type { SessionState } from './types'
 
+function Section({
+  title,
+  count,
+  defaultOpen,
+  children,
+}: {
+  title: string
+  count: number
+  defaultOpen: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <section>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 py-1 focus:outline-none group"
+      >
+        <span className="font-mono text-xs uppercase tracking-widest text-zinc-500 group-hover:text-zinc-300 transition-colors">
+          {title}
+        </span>
+        <span className="font-mono text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">
+          ({count})
+        </span>
+        <span className="font-mono text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors ml-auto">
+          {open ? '▲' : '▼'}
+        </span>
+      </button>
+      {open && children}
+    </section>
+  )
+}
+
 const STATUS_LABEL: Record<string, string> = {
   connecting: '⟳ connecting…',
   connected: '● live',
@@ -61,33 +94,25 @@ export default function App() {
         </span>
       </header>
 
-      <main className="p-4 space-y-6">
-        {running.length > 0 && (
-          <section>
-            <h2 className="font-mono text-xs uppercase tracking-widest text-zinc-500 mb-2">
-              Active
-            </h2>
-            <div className="space-y-3">
+      <main className="p-4 space-y-2">
+        <Section title="Active" count={running.length} defaultOpen={true}>
+          {running.length === 0 ? (
+            <div className="py-6 text-center text-zinc-600 font-mono text-xs">
+              {query ? 'No active sessions match.' : 'No active sessions.'}
+            </div>
+          ) : (
+            <div className="space-y-3 pt-2">
               {running.map((s) => <SessionView key={s.id} session={s} />)}
             </div>
-          </section>
-        )}
+          )}
+        </Section>
 
         {done.length > 0 && (
-          <section>
-            <h2 className="font-mono text-xs uppercase tracking-widest text-zinc-500 mb-2">
-              History
-            </h2>
-            <div className="space-y-3">
+          <Section title="History" count={done.length} defaultOpen={false}>
+            <div className="space-y-3 pt-2">
               {done.map((s) => <SessionView key={s.id} session={s} />)}
             </div>
-          </section>
-        )}
-
-        {sorted.length === 0 && status === 'connected' && (
-          <div className="text-center py-24 text-zinc-500 font-mono text-sm">
-            {query ? 'No sessions match.' : 'No sessions yet. Start a Claude Code session to see activity.'}
-          </div>
+          </Section>
         )}
       </main>
     </div>
