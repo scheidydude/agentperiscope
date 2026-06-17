@@ -1,0 +1,16 @@
+{
+  "session_id": "REDACTED-SESSION-UUID",
+  "transcript_path": "/Users/REDACTED/.claude/projects/-Users-REDACTED-project/REDACTED-SESSION-UUID.jsonl",
+  "cwd": "/Users/REDACTED/project",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "echo hello",
+    "description": "Example bash command"
+  },
+  "tool_use_id": "toolu_REDACTED"
+}
