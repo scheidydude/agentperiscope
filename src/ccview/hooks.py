@@ -13,15 +13,31 @@ log = logging.getLogger(__name__)
 _HOOK_EVENTS = ["SubagentStart", "SubagentStop", "Stop", "PreToolUse", "PostToolUse"]
 
 
-def handle_hook(port: int) -> None:
+def _resolve_port(port: int | None, claude_dir: Path | None = None) -> int | None:
+    """Return port from explicit arg, port file, or None if server not running."""
+    if port:
+        return port
+    from ccview import config as cfg
+    port_file = cfg.claude_dir(str(claude_dir) if claude_dir else None) / "ccview.port"
+    try:
+        return int(port_file.read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def handle_hook(port: int | None = None) -> None:
     """Read hook JSON from stdin, POST to local server. Exit fast."""
     try:
         payload = sys.stdin.buffer.read()
     except Exception:
         sys.exit(0)
 
+    resolved = _resolve_port(port)
+    if not resolved:
+        sys.exit(0)  # server not running — fail silently
+
     try:
-        url = f"http://127.0.0.1:{port}/events"
+        url = f"http://127.0.0.1:{resolved}/events"
         req = urllib.request.Request(
             url,
             data=payload,

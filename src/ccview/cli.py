@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 import sys
 import webbrowser
 from pathlib import Path
@@ -58,6 +59,8 @@ def main(
     typer.echo(f"ccview listening on {url}")
     typer.echo(f"watching: {projects}")
 
+    port_file = cfg.claude_dir(claude_dir) / "ccview.port"
+
     async def _run() -> None:
         uv_config = uvicorn.Config(
             fastapi_app,
@@ -70,10 +73,24 @@ def main(
         if not no_open:
             asyncio.get_event_loop().call_later(0.5, lambda: webbrowser.open(url))
 
-        await asyncio.gather(
-            server.serve(),
-            watcher.run(),
-        )
+        def _cleanup() -> None:
+            try:
+                port_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _cleanup)
+
+        try:
+            port_file.write_text(str(actual_port))
+            await asyncio.gather(
+                server.serve(),
+                watcher.run(),
+            )
+        finally:
+            _cleanup()
 
     asyncio.run(_run())
 
@@ -84,7 +101,7 @@ def main(
 
 @app.command("hook")
 def hook_cmd(
-    port: Annotated[int, typer.Option("--port", help="ccview server port")] = 7821,
+    port: Annotated[Optional[int], typer.Option("--port", help="ccview server port (auto-detected if omitted)")] = None,
 ) -> None:
     """Read hook JSON from stdin and POST to the local ccview server."""
     from ccview.hooks import handle_hook
