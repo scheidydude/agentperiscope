@@ -106,8 +106,12 @@ def main(
         if not no_open:
             asyncio.get_event_loop().call_later(0.5, lambda: webbrowser.open(url))
 
-        def _cleanup() -> None:
+        def _shutdown() -> None:
             server.should_exit = True
+            current = asyncio.current_task()
+            for task in asyncio.all_tasks():
+                if task is not current:
+                    task.cancel()
             try:
                 port_file.unlink(missing_ok=True)
             except OSError:
@@ -115,16 +119,24 @@ def main(
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, _cleanup)
+            loop.add_signal_handler(sig, _shutdown)
+
+        fastapi_app.state.shutdown = _shutdown
 
         try:
             port_file.write_text(str(actual_port))
             await asyncio.gather(
                 server.serve(),
                 *[p.run() for p in providers],
+                return_exceptions=True,
             )
+        except asyncio.CancelledError:
+            pass
         finally:
-            _cleanup()
+            try:
+                port_file.unlink(missing_ok=True)
+            except OSError:
+                pass
             db.close()
 
     asyncio.run(_run())
@@ -174,6 +186,37 @@ def uninstall_hooks_cmd(
     paths = _resolve_settings_paths(global_, project, claude_dir)
     for p in paths:
         uninstall_hooks(p)
+
+
+@app.command("install-service")
+def install_service_cmd(
+    bin_override: Annotated[Optional[str], typer.Option("--bin", help="Path to agentperiscope binary")] = None,
+) -> None:
+    """Install agentperiscope as a macOS LaunchAgent (auto-start on login)."""
+    import platform
+    if platform.system() != "Darwin":
+        typer.echo("install-service is macOS only.", err=True)
+        raise typer.Exit(1)
+    from agentperiscope.service import install
+    install(bin_override)
+
+
+@app.command("uninstall-service")
+def uninstall_service_cmd() -> None:
+    """Remove the agentperiscope macOS LaunchAgent."""
+    import platform
+    if platform.system() != "Darwin":
+        typer.echo("uninstall-service is macOS only.", err=True)
+        raise typer.Exit(1)
+    from agentperiscope.service import uninstall
+    uninstall()
+
+
+@app.command("service-status")
+def service_status_cmd() -> None:
+    """Show launchctl status for the agentperiscope service."""
+    from agentperiscope.service import status
+    status()
 
 
 def _resolve_settings_paths(global_: bool, project: bool, claude_dir_override: str | None) -> list[Path]:

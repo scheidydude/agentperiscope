@@ -93,6 +93,13 @@ def build_app(store: Store) -> FastAPI:
             return Response(status_code=404)
         return JSONResponse(session.to_full_dict())
 
+    @app.post("/api/stop")
+    async def stop_server(request: Request) -> Response:
+        shutdown = getattr(request.app.state, "shutdown", None)
+        if shutdown:
+            asyncio.get_event_loop().call_soon(shutdown)
+        return JSONResponse({"status": "stopping"})
+
     # Serve built SPA if present, else a minimal fallback
     if WEB_DIR.exists() and (WEB_DIR / "index.html").exists():
         app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="spa")
