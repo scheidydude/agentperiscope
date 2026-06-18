@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -103,6 +104,26 @@ class OpenCodeProvider(Provider):
                 continue
 
             self._ingest_messages(conn, sid)
+            self._reconcile_stale_session(sid)
+
+    def _reconcile_stale_session(self, session_id: str) -> None:
+        session = self._store.get_session(session_id)
+        if not session or session.status == "done":
+            return
+        agent = session.agents.get(session_id)
+        if not agent or agent.status != "running":
+            return
+        if not session.last_activity_ts:
+            return
+        try:
+            last = datetime.fromisoformat(session.last_activity_ts.replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - last).total_seconds() > 1800:  # 30 min
+                session.status = "done"
+                agent.status = "done"
+                agent.current_tool = None
+                self._store._emit({"type": "session_update", "session": session.to_dict()})
+        except (ValueError, TypeError):
+            pass
 
     def _ingest_messages(self, conn: sqlite3.Connection, session_id: str) -> None:
         session = self._store.get_session(session_id)
@@ -122,8 +143,12 @@ class OpenCodeProvider(Provider):
             data = _safe_json(row["data"])
             role = data.get("role", "")
             finish = data.get("finish")
+            error = data.get("error")
             if finish:
                 last_finish = finish
+            elif error and role == "assistant":
+                # Aborted/errored turns (MessageAbortedError etc.) are terminal
+                last_finish = "error"
 
             msg_id = row["id"]
             if role == "assistant" and msg_id not in self._msg_seen:
@@ -145,7 +170,8 @@ class OpenCodeProvider(Provider):
                 self._ingest_parts(conn, msg_id, session_id, ts)
 
         # Determine session completion
-        if last_finish == "stop" and session.status == "running":
+        is_terminal = last_finish in ("stop", "error")
+        if is_terminal and session.status == "running":
             session.status = "done"
             agent.status = "done"
             agent.current_tool = None

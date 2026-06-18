@@ -248,6 +248,15 @@ def test_opencode_idempotent_poll():
     assert len(text_events) == 1
 
 
+def test_opencode_aborted_session_marked_done():
+    provider, store = _make_oc_provider()
+    provider._poll_once()
+
+    session = store.snapshot()["sessions"].get("ses_aborted001")
+    assert session is not None
+    assert session["status"] == "done"
+
+
 def test_opencode_missing_db_does_not_crash(tmp_path: Path):
     store = Store()
     provider = OpenCodeProvider(db_path=tmp_path / "nonexistent.db", store=store)
