@@ -1,6 +1,6 @@
 # agentperiscope
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 Local live observability viewer for AI agent activity. Tails session transcripts from Claude Code, Codex, and OpenCode, then renders a live per-agent view in the browser.
 

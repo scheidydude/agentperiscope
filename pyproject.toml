@@ -7,6 +7,7 @@ name = "agentperiscope"
 version = "0.1.0"
 description = "Local live viewer for Claude Code subagent activity"
 readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
