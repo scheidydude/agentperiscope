@@ -2,13 +2,13 @@
 
 ## 1. Mission
 
-`agentperiscope` is a local live viewer for Claude Code subagent activity. It tails CC session transcripts, listens to lifecycle hooks, and renders a per-agent lane view in the browser at `127.0.0.1`. Phase 1 (MVP) and Phase 2 (history + search + expand + modal + stale-session fix + collapsible sections) are complete. Phase 3 scope is TBD — ask the user.
+`agentperiscope` is a local live viewer for Claude Code subagent activity. It tails CC session transcripts, listens to lifecycle hooks, and renders a per-agent lane view in the browser at `127.0.0.1`. Phase 1 (MVP) and Phase 2 (history + search + expand + modal + stale-session fix + collapsible sections) are complete. Open-sourced under MIT. Phase 3 scope is TBD — ask the user.
 
 ---
 
 ## 2. Current State
 
-### Committed and working (9 commits on `main`)
+### Committed on `main` (10 commits)
 
 - `cd32df6` — Phase 1 MVP: watcher, parser, in-memory store, FastAPI server, React SPA, CLI, hooks, 18 tests
 - `10f6cbd` — Hook port fix: `~/.claude/agentperiscope.port` auto-discovery
@@ -19,18 +19,18 @@
 - `683f1db` — chore: untrack `__pycache__`, archive HANDOFFs
 - `bb6a12b` — feat: collapsible Active/History sections with item counts; Active always shown
 - `59f1c6c` — feat: pop-out modal for agent event details
+- `2bac495` — refactor: rename project ccview → agentperiscope (package, CLI, state files, imports)
+
+**Repo**: `git@github.com:scheidydude/agentperiscope.git`
 
 **Verified working:**
 - `uv run agentperiscope` launches, opens browser
-- Active (always shown, defaults open) / History (defaults closed) sections collapsible with counts
-- Sessions that ended while agentperiscope was down correctly appear in History on next boot
+- Active / History sections collapsible with counts; Active always shown
+- Sessions that ended while agentperiscope was down appear in History on next boot
 - SQLite history survives restart
 - Search bar filters live
-- AgentCard ▼/▲ expands inline event list (scrollable, max 48 rows)
-- **⤢ pop out** opens full modal: scrollable event list, full text (no truncation), metadata, timestamps, event count
-- Modal closes on ✕ or backdrop click; events fetched once and reused
+- AgentCard ▼/▲ expand + **⤢ pop out** modal
 - 18/18 tests pass (`uv run pytest tests/ -q`)
-- `__pycache__` untracked from git
 
 ### Not started
 
@@ -44,41 +44,49 @@ Ask user what Phase 3 should be.
 
 ## 3. Decisions Made (and Why)
 
+**Decision:** MIT license
+- **Reason:** Standard permissive OSS license. Copyright 2026 David Scheiderman.
+- **Reversibility:** Easy to change before first public release.
+
 **Decision:** Pop-out modal uses `createPortal` to `document.body`
-- **Reason:** Avoids z-index/overflow clipping from ancestor elements (the AgentCard has `overflow` and border context). Portal renders at body level, always above everything.
+- **Reason:** Avoids z-index/overflow clipping from AgentCard ancestor elements.
 - **Reversibility:** Easy.
 
-**Decision:** Events fetched once per AgentCard, reused for both inline and modal views
-- **Reason:** No need to refetch when toggling modal. State lives in AgentCard; fetch is triggered on first expand or first modal open (whichever comes first).
+**Decision:** Events fetched once per AgentCard, reused for inline and modal
+- **Reason:** No refetch needed when toggling modal. Fetch on first expand or first modal open.
 - **Reversibility:** Easy.
 
-**Decision:** Collapsible sections via local `useState` in `Section` component (not URL/global state)
+**Decision:** Collapsible sections via local `useState` in `Section` component
 - **Reason:** Ephemeral UI preference, not worth persisting. Simple and self-contained.
-- **Reversibility:** Easy — could add localStorage persistence later.
+- **Reversibility:** Easy — could add localStorage later.
 
-**Decision:** Active section always rendered even at 0 items; History only rendered when non-empty
-- **Reason:** Active is the primary view. Seeing "No active sessions" is informative. History with 0 items after filtering adds no value.
+**Decision:** Active always shown (even at 0); History only when non-empty
+- **Reason:** Active is the primary view — "No active sessions" is informative.
 - **Reversibility:** Easy — `App.tsx`.
 
-**Decision:** Detect root session completion via JSONL tail read on boot
-- **Reason:** Sessions that ended while agentperiscope was down would stay "running" for up to an hour. Reads last AssistantLine; if `stop_reason == "end_turn"` → immediately done. 1-hour fallback retained for mid-turn kills.
+**Decision:** Root session completion via JSONL tail read on boot
+- **Reason:** Sessions that ended while agentperiscope was down stayed "running" for an hour. Reads last AssistantLine; `end_turn` → done immediately. 1-hour fallback for mid-turn kills.
 - **Reversibility:** Easy — `watcher.py:_reconcile_one_root`.
 
 **Decision:** SQLite at `~/.claude/agentperiscope.db`, DB subscriber on Store delta stream
-- **Reason:** State files under `claude_dir`. DB is a side-effect layer; Store stays pure in-memory.
+- **Reason:** State files under `claude_dir`. Store stays pure in-memory; DB is a side-effect layer.
 - **Reversibility:** Easy.
 
-**Decision:** `db.load_into(store)` before `store.subscribe(db.on_delta)`
-- **Reason:** Prevents history load from re-emitting WS deltas. Order in `cli.py` is load-bearing.
-- **Reversibility:** Easy but must not reorder.
+**Decision:** `db.load_into(store)` before `store.subscribe(db.on_delta)` in `cli.py`
+- **Reason:** Prevents history load from re-emitting WS deltas to clients.
+- **Reversibility:** Easy but ordering is load-bearing — do not reorder.
 
 **Decision:** `session_start` delta upserts all agents including root
-- **Reason:** Root agent is created inside `ensure_session` and only appears in `session_start` — never as a separate `agent_start`. Without this it never reaches the DB.
+- **Reason:** Root agent only appears in `session_start`, never as a separate `agent_start`. Without this it never reaches the DB.
 - **Reversibility:** Easy — `db.on_delta`.
 
 **Decision:** `/api/sessions/{id}` registered before `app.mount("/", StaticFiles(...))` in `server.py`
-- **Reason:** FastAPI matches routes in registration order. StaticFiles at `/` would catch `/api/*` otherwise.
+- **Reason:** FastAPI matches routes in registration order. StaticFiles at `/` catches `/api/*` otherwise.
 - **Reversibility:** Load-bearing ordering — do not move the mount above API routes.
+
+**Decision:** Client-side search (no backend endpoint)
+- **Reason:** All sessions including history are in the WS snapshot. Browser filtering is instant.
+- **Reversibility:** Easy to add server-side if DB grows too large.
 
 ---
 
@@ -88,24 +96,24 @@ Ask user what Phase 3 should be.
 
 | File | Purpose |
 |---|---|
-| `config.py` | Resolves Claude config dir. `db_path()` returns `~/.claude/agentperiscope.db`. |
-| `db.py` | `DB` class: SQLite schema, `load_into`, `on_delta`, upsert helpers. |
-| `model.py` | `Store` + `Session`/`Agent`/`Event`. `to_full_dict()` on Agent/Session includes events (REST only). |
-| `server.py` | FastAPI. `GET /api/sessions/{id}` registered before SPA mount. |
+| `config.py` | Resolves Claude config dir. `db_path()` → `~/.claude/agentperiscope.db`. |
+| `db.py` | `DB`: SQLite schema, `load_into`, `on_delta`, upsert helpers. |
+| `model.py` | `Store` + `Session`/`Agent`/`Event`. `to_full_dict()` includes events (REST only). |
+| `server.py` | FastAPI. `GET /api/sessions/{id}` before SPA mount. |
 | `cli.py` | DB init → `load_into` → `subscribe` → Watcher. `db.close()` in finally. |
 | `watcher.py` | Boot scan + live watch. `_reconcile_one_root` reads JSONL tail for `end_turn`. |
-| `transcripts.py` | Unchanged. Typed line models + `Tailer`. |
-| `hooks.py` | Unchanged. |
+| `transcripts.py` | Typed line models + `Tailer`. Unchanged since Phase 1. |
+| `hooks.py` | Hook ingest + install/uninstall. Marker string: `"agentperiscope"`. |
 
 ### React frontend (`frontend/src/`)
 
 | File | Purpose |
 |---|---|
-| `types.ts` | `EventState` interface; `AgentState.events?: EventState[]`. |
-| `AgentCard.tsx` | Expand toggle + inline event list + **⤢ pop out** button + `AgentModal` (portal). |
+| `types.ts` | `EventState`; `AgentState.events?: EventState[]`. |
+| `AgentCard.tsx` | Expand toggle + inline event list + **⤢ pop out** + `AgentModal` (portal). |
 | `SessionView.tsx` | Passes `sessionId` to `AgentCard`. |
-| `App.tsx` | `Section` component (collapsible, count); search input + `matchesQuery`. |
-| `useStore.ts` | Unchanged. |
+| `App.tsx` | `Section` (collapsible, count); search input + `matchesQuery`. |
+| `useStore.ts` | WS connect + reconnect + state reducer. Unchanged since Phase 1. |
 
 ### Built output
 - `src/agentperiscope/web/` — committed. Rebuild: `cd frontend && npm run build`.
@@ -118,23 +126,23 @@ Ask user what Phase 3 should be.
 
 ## 5. Gotchas & Hard-Won Knowledge
 
-- **CC refreshes mtime on old session files at startup.** Never use file mtime for staleness. Use `last_activity_ts` (content timestamp) or `stop_reason` from the JSONL tail.
+- **CC refreshes mtime on old session files at startup.** Never use file mtime for staleness. Use `last_activity_ts` (content timestamp) or `stop_reason` from JSONL tail.
 
-- **`async_launched` ≠ done.** Background-dispatch signal. Subagent still running. Only the subagent's own tail (or age >5 min) tells you when it finishes.
+- **`async_launched` ≠ done.** Background-dispatch signal. Subagent still running. Only subagent's own tail (or age >5 min) tells you when it finishes.
 
 - **`stop_reason="tool_use"` is mid-turn.** `end_turn` = complete; `tool_use` = waiting for tool result.
 
-- **Root agent only emitted in `session_start`, never as `agent_start`.** `ensure_session` creates it inline. DB must handle it in the `session_start` branch of `on_delta`.
+- **Root agent only emitted in `session_start`, never as `agent_start`.** `ensure_session` creates it inline. DB `on_delta` must handle it in the `session_start` branch.
 
 - **`load_into` must precede `store.subscribe(db.on_delta)`.** Order: `DB()` → `Store()` → `load_into` → `subscribe` → `Watcher`. Do not reorder.
 
-- **`check_same_thread=False` on sqlite3.** Single asyncio thread, so no real race; just satisfies SQLite's default thread check.
+- **`check_same_thread=False` on sqlite3.** Single asyncio thread; just satisfies SQLite's default thread check.
 
 - **`to_full_dict()` is REST-only.** Never call in `snapshot()` or WS deltas — event lists are large.
 
 - **StaticFiles mount at `/` must be last in `build_app`.** Any `@app.get(...)` after it is unreachable.
 
-- **Hundreds of ghost sessions from metadata-only JSONLs.** Guard: `s.cwd && s.last_activity_ts` in `App.tsx`. Not persisted to SQLite.
+- **Hundreds of ghost sessions from metadata-only JSONLs.** Guard: `s.cwd && s.last_activity_ts` in `App.tsx`.
 
 - **Boot scan ordering is load-bearing.** Subagent files before parent files. Reverting silently drops completion events.
 
@@ -155,17 +163,17 @@ Ask user what Phase 3 should be.
 
 ## 7. Open Questions
 
-1. **Phase 3 scope — what's next?** Options:
-   - (a) Event persistence to SQLite: expand modal currently empty for sessions from prior ccview run
-   - (b) DB retention policy: everything vs. configurable window (last 30 days)
+1. **Phase 3 scope — what's next?**
+   - (a) Event persistence to SQLite: expand modal empty for sessions from prior run
+   - (b) DB retention policy: everything vs. configurable window (e.g. last 30 days)
    - (c) Token cost estimates: model → $/1k token, session cost total
    - (d) macOS notification on session complete
-   - (e) Server-side pagination if DB grows too large for full-snapshot delivery
+   - (e) Server-side pagination if DB grows too large
    - **Ask user before building.**
 
-2. **No event persistence yet.** Pop-out modal shows nothing for historical sessions (prior run). Worth adding `events` table to DB?
+2. **No event persistence yet.** Pop-out modal shows nothing for historical sessions (prior run).
 
-3. **No tests for Phase 2 features.** DB, search, expand, modal untested at unit level.
+3. **No tests for Phase 2.** DB, search, expand, modal untested at unit level.
 
 ---
 
@@ -183,4 +191,4 @@ Ask user what Phase 3 should be.
 
 ## 9. Resume Command
 
-> "Read HANDOFF.md. Phase 1 and Phase 2 are complete. Ask the user what Phase 3 should be before writing any code. Do not touch watcher.py completion logic, model.py status mapping, or route ordering in server.py without reading sections 5 and 8. Run `uv run pytest tests/ -q` after any Python changes."
+> "Read HANDOFF.md. Phase 1 and Phase 2 complete; project open-sourced as agentperiscope (MIT). Ask the user what Phase 3 should be before writing any code. Do not touch watcher.py completion logic, model.py status mapping, or route ordering in server.py without reading sections 5 and 8. Run `uv run pytest tests/ -q` after any Python changes."

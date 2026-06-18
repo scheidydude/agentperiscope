@@ -1,5 +1,7 @@
 # agentperiscope
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Local live viewer for Claude Code subagent activity. Tails session transcripts and listens to lifecycle hooks, then renders a live per-agent view in the browser.
 
 ## Install
