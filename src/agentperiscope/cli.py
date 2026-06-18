@@ -188,6 +188,35 @@ def uninstall_hooks_cmd(
         uninstall_hooks(p)
 
 
+@app.command("port")
+def port_cmd(
+    claude_dir: Annotated[Optional[str], typer.Option("--claude-dir")] = None,
+) -> None:
+    """Print the port agentperiscope is listening on."""
+    port_file = cfg.claude_dir(claude_dir) / "agentperiscope.port"
+    if not port_file.exists():
+        typer.echo("agentperiscope is not running (port file not found)", err=True)
+        raise typer.Exit(1)
+    port = port_file.read_text().strip()
+    typer.echo(f"http://127.0.0.1:{port}")
+
+
+@app.command("open")
+def open_cmd(
+    claude_dir: Annotated[Optional[str], typer.Option("--claude-dir")] = None,
+) -> None:
+    """Open agentperiscope in the browser."""
+    import webbrowser
+    port_file = cfg.claude_dir(claude_dir) / "agentperiscope.port"
+    if not port_file.exists():
+        typer.echo("agentperiscope is not running (port file not found)", err=True)
+        raise typer.Exit(1)
+    port = port_file.read_text().strip()
+    url = f"http://127.0.0.1:{port}"
+    typer.echo(url)
+    webbrowser.open(url)
+
+
 @app.command("install-service")
 def install_service_cmd(
     bin_override: Annotated[Optional[str], typer.Option("--bin", help="Path to agentperiscope binary")] = None,

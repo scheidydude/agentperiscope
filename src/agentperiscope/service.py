@@ -82,3 +82,11 @@ def status() -> None:
         print(result.stdout)
     else:
         print(f"Service '{LABEL}' is not loaded.")
+
+    from pathlib import Path
+    port_file = Path.home() / ".claude" / "agentperiscope.port"
+    if port_file.exists():
+        port = port_file.read_text().strip()
+        print(f"Listening on: http://127.0.0.1:{port}")
+    else:
+        print("Port file not found — server may not be running.")
