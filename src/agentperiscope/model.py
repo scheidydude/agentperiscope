@@ -63,6 +63,7 @@ class Agent:
     events: list[Event] = field(default_factory=list)
     child_ids: list[str] = field(default_factory=list)
     transcript_path: Path | None = None
+    provider: str = "claude-code"
 
     def to_dict(self) -> dict:
         return {
@@ -84,6 +85,7 @@ class Agent:
                 "total": self.tokens.total(),
             },
             "child_ids": self.child_ids,
+            "provider": self.provider,
         }
 
     def to_full_dict(self) -> dict:
@@ -103,6 +105,7 @@ class Session:
     root_agent_id: str = ""
     agents: dict[str, Agent] = field(default_factory=dict)
     last_activity_ts: str = ""  # ISO timestamp of last real assistant/user line
+    provider: str = "claude-code"
 
     def to_dict(self) -> dict:
         return {
@@ -115,6 +118,7 @@ class Session:
             "root_agent_id": self.root_agent_id,
             "last_activity_ts": self.last_activity_ts,
             "agents": {k: v.to_dict() for k, v in self.agents.items()},
+            "provider": self.provider,
         }
 
     def to_full_dict(self) -> dict:
@@ -161,7 +165,7 @@ class Store:
     def get_session(self, session_id: str) -> Session | None:
         return self._sessions.get(session_id)
 
-    def ensure_session(self, session_id: str, cwd: str, project_slug: str) -> Session:
+    def ensure_session(self, session_id: str, cwd: str, project_slug: str, provider: str = "claude-code") -> Session:
         if session_id not in self._sessions:
             agent = Agent(
                 id=session_id,
@@ -170,6 +174,7 @@ class Store:
                 agent_type="root",
                 description=None,
                 started_at=str(time.time()),
+                provider=provider,
             )
             session = Session(
                 id=session_id,
@@ -177,6 +182,7 @@ class Store:
                 project_slug=project_slug,
                 root_agent_id=session_id,
                 agents={session_id: agent},
+                provider=provider,
             )
             self._sessions[session_id] = session
             self._emit({"type": "session_start", "session": session.to_dict()})
@@ -197,11 +203,12 @@ class Store:
         description: str | None,
         transcript_path: Path | None,
         started_at: str,
+        provider: str = "claude-code",
     ) -> Agent:
         session = self._sessions.get(session_id)
         if session is None:
             return Agent(id=agent_id, session_id=session_id, parent_agent_id=None,
-                         agent_type=agent_type, description=description)
+                         agent_type=agent_type, description=description, provider=provider)
 
         if agent_id not in session.agents:
             agent = Agent(
@@ -212,6 +219,7 @@ class Store:
                 description=description,
                 transcript_path=transcript_path,
                 started_at=started_at,
+                provider=provider,
             )
             session.agents[agent_id] = agent
             if parent_agent_id and parent_agent_id in session.agents:

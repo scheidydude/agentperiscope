@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     started_at       TEXT    NOT NULL DEFAULT '',
     status           TEXT    NOT NULL DEFAULT 'running',
     root_agent_id    TEXT    NOT NULL DEFAULT '',
-    last_activity_ts TEXT    NOT NULL DEFAULT ''
+    last_activity_ts TEXT    NOT NULL DEFAULT '',
+    provider         TEXT    NOT NULL DEFAULT 'claude-code'
 );
 CREATE TABLE IF NOT EXISTS agents (
     id                    TEXT    NOT NULL,
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS agents (
     tokens_output         INTEGER NOT NULL DEFAULT 0,
     tokens_cache_creation INTEGER NOT NULL DEFAULT 0,
     tokens_cache_read     INTEGER NOT NULL DEFAULT 0,
+    provider              TEXT    NOT NULL DEFAULT 'claude-code',
     PRIMARY KEY (id, session_id)
 );
 """
@@ -45,6 +47,18 @@ class DB:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_DDL)
         self._conn.commit()
+        self._migrate()
+
+    def _migrate(self) -> None:
+        for stmt in (
+            "ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude-code'",
+            "ALTER TABLE agents ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude-code'",
+        ):
+            try:
+                self._conn.execute(stmt)
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def load_into(self, store: "Store") -> None:
         from agentperiscope.model import Agent, Session, TokenCounts
@@ -59,6 +73,7 @@ class DB:
                 status=row["status"],
                 root_agent_id=row["root_agent_id"],
                 last_activity_ts=row["last_activity_ts"],
+                provider=row["provider"] if "provider" in row.keys() else "claude-code",
             )
             store._sessions[row["id"]] = session
 
@@ -82,6 +97,7 @@ class DB:
                     cache_creation=row["tokens_cache_creation"],
                     cache_read=row["tokens_cache_read"],
                 ),
+                provider=row["provider"] if "provider" in row.keys() else "claude-code",
             )
             session.agents[row["id"]] = agent
 
@@ -105,8 +121,8 @@ class DB:
     def _upsert_session(self, s: dict) -> None:
         self._conn.execute(
             """INSERT INTO sessions
-                   (id, cwd, project_slug, model, started_at, status, root_agent_id, last_activity_ts)
-               VALUES (:id, :cwd, :project_slug, :model, :started_at, :status, :root_agent_id, :last_activity_ts)
+                   (id, cwd, project_slug, model, started_at, status, root_agent_id, last_activity_ts, provider)
+               VALUES (:id, :cwd, :project_slug, :model, :started_at, :status, :root_agent_id, :last_activity_ts, :provider)
                ON CONFLICT(id) DO UPDATE SET
                    cwd=excluded.cwd,
                    project_slug=excluded.project_slug,
@@ -114,8 +130,9 @@ class DB:
                    started_at=excluded.started_at,
                    status=excluded.status,
                    root_agent_id=excluded.root_agent_id,
-                   last_activity_ts=excluded.last_activity_ts""",
-            s,
+                   last_activity_ts=excluded.last_activity_ts,
+                   provider=excluded.provider""",
+            {**s, "provider": s.get("provider", "claude-code")},
         )
         self._conn.commit()
 
@@ -124,8 +141,8 @@ class DB:
             """INSERT INTO agents
                    (id, session_id, parent_agent_id, agent_type, description,
                     status, started_at, ended_at, last_text,
-                    tokens_input, tokens_output, tokens_cache_creation, tokens_cache_read)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    tokens_input, tokens_output, tokens_cache_creation, tokens_cache_read, provider)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id, session_id) DO UPDATE SET
                    parent_agent_id=excluded.parent_agent_id,
                    agent_type=excluded.agent_type,
@@ -136,13 +153,15 @@ class DB:
                    tokens_input=excluded.tokens_input,
                    tokens_output=excluded.tokens_output,
                    tokens_cache_creation=excluded.tokens_cache_creation,
-                   tokens_cache_read=excluded.tokens_cache_read""",
+                   tokens_cache_read=excluded.tokens_cache_read,
+                   provider=excluded.provider""",
             (
                 a["id"], a["session_id"], a["parent_agent_id"], a["agent_type"],
                 a["description"], a["status"], a["started_at"], a["ended_at"],
                 a["last_text"],
                 a["tokens"]["input"], a["tokens"]["output"],
                 a["tokens"]["cache_creation"], a["tokens"]["cache_read"],
+                a.get("provider", "claude-code"),
             ),
         )
         self._conn.commit()

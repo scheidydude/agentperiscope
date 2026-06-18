@@ -1,5 +1,6 @@
 import type { SessionState } from './types'
 import { AgentCard } from './AgentCard'
+import { ProviderBadge } from './ProviderBadge'
 
 interface Props {
   session: SessionState
@@ -25,16 +26,19 @@ export function SessionView({ session }: Props) {
     <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-4">
       {/* Session header */}
       <div className="flex items-center gap-2 mb-3">
-        <span className={`h-2 w-2 rounded-full ${hasRunning ? 'bg-blue-400 animate-pulse' : 'bg-zinc-600'}`} />
-        <span className="font-mono text-sm font-semibold text-zinc-200">
+        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${hasRunning ? 'bg-blue-400 animate-pulse' : 'bg-zinc-600'}`} />
+        <span className="font-mono text-sm font-semibold text-zinc-200 truncate">
           {shortCwd(session.cwd)}
         </span>
-        <span className="font-mono text-xs text-zinc-500 ml-auto">
-          {shortId(session.id)}
-        </span>
-        {session.model && (
-          <span className="text-xs text-zinc-500 ml-1">{session.model}</span>
-        )}
+        <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+          <ProviderBadge provider={session.provider ?? 'claude-code'} />
+          <span className="font-mono text-xs text-zinc-500">
+            {shortId(session.id)}
+          </span>
+          {session.model && (
+            <span className="text-xs text-zinc-500">{session.model}</span>
+          )}
+        </div>
       </div>
 
       {/* Agent lane grid */}

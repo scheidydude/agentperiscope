@@ -17,3 +17,21 @@ def projects_dir(override: str | None = None) -> Path:
 
 def db_path(override: str | None = None) -> Path:
     return claude_dir(override) / "agentperiscope.db"
+
+
+def default_provider_configs(claude_dir_override: str | None = None) -> dict:
+    return {
+        "claude-code": {
+            "enabled": True,
+            "transcript_dir": str(projects_dir(claude_dir_override)),
+        },
+        "codex-cli": {
+            "enabled": True,
+            "session_dir": str(Path.home() / ".codex" / "sessions"),
+            "session_index": str(Path.home() / ".codex" / "session_index.jsonl"),
+        },
+        "opencode": {
+            "enabled": True,
+            "db_path": str(Path.home() / ".local" / "share" / "opencode" / "opencode.db"),
+        },
+    }

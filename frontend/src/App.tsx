@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useStore } from './useStore'
 import { SessionView } from './SessionView'
+import { ProviderFilter } from './ProviderFilter'
 import type { SessionState } from './types'
+
+const ALL_PROVIDERS = ['claude-code', 'codex-cli', 'opencode']
 
 function Section({
   title,
@@ -52,6 +55,7 @@ function matchesQuery(s: SessionState, q: string): boolean {
   const lq = q.toLowerCase()
   if (s.cwd.toLowerCase().includes(lq)) return true
   if (s.project_slug.toLowerCase().includes(lq)) return true
+  if ((s.provider ?? '').toLowerCase().includes(lq)) return true
   return Object.values(s.agents).some(
     (a) =>
       (a.description?.toLowerCase().includes(lq) ?? false) ||
@@ -62,9 +66,11 @@ function matchesQuery(s: SessionState, q: string): boolean {
 export default function App() {
   const { sessions, status } = useStore()
   const [query, setQuery] = useState('')
+  const [selectedProviders, setSelectedProviders] = useState<string[]>(ALL_PROVIDERS)
 
   const sorted = Object.values(sessions)
     .filter((s) => s.cwd && s.last_activity_ts)
+    .filter((s) => selectedProviders.includes(s.provider ?? 'claude-code'))
     .filter((s) => !query || matchesQuery(s, query))
     .sort((a, b) => b.last_activity_ts.localeCompare(a.last_activity_ts))
 
@@ -86,6 +92,7 @@ export default function App() {
           placeholder="search sessions…"
           className="ml-4 flex-1 max-w-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
         />
+        <ProviderFilter selected={selectedProviders} onChange={setSelectedProviders} />
         <span className={`font-mono text-xs ml-auto ${STATUS_CLS[status]}`}>
           {STATUS_LABEL[status]}
         </span>

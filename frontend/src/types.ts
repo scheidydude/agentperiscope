@@ -31,6 +31,7 @@ export interface AgentState {
   tokens: TokenCounts
   child_ids: string[]
   events?: EventState[]
+  provider: string
 }
 
 export interface SessionState {
@@ -43,6 +44,7 @@ export interface SessionState {
   root_agent_id: string
   last_activity_ts: string
   agents: Record<string, AgentState>
+  provider: string
 }
 
 export type Sessions = Record<string, SessionState>
