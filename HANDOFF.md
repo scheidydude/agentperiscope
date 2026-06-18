@@ -2,305 +2,237 @@
 
 ## 1. Mission
 
-`agentperiscope` is a local live observability viewer for AI agent activity. It tails session transcripts, listens to lifecycle hooks, and renders a per-agent lane view in the browser at `127.0.0.1`. Phase 1 (MVP) and Phase 2 (history + search + expand + modal + stale-session fix + collapsible sections) are complete. **Phase 3** extends the project from a Claude Code-only viewer into a multi-provider live observability viewer supporting Claude Code, Codex CLI, and OpenCode.
+`agentperiscope` is a local live observability viewer for AI agent activity. It tails session transcripts and listens to lifecycle hooks across multiple providers (Claude Code, Codex, OpenCode), then renders a per-agent lane view in the browser at `127.0.0.1`. Phase 1 (MVP), Phase 2 (history + search + expand + modal), and Phase 3 (multi-provider) are complete and working. Open-sourced under MIT.
 
 ---
 
 ## 2. Current State
 
-### Committed on `main` (10 commits, all Phase 1–2)
+### Committed on `main` (16 commits)
 
 - `cd32df6` — Phase 1 MVP: watcher, parser, in-memory store, FastAPI server, React SPA, CLI, hooks, 18 tests
 - `10f6cbd` — Hook port fix: `~/.claude/agentperiscope.port` auto-discovery
 - `90d48a2` — Phase 2a: SQLite persistence — `~/.claude/agentperiscope.db`, survives restarts
-- `d479042` — Phase 2b: client-side search bar (cwd, project_slug, description, last_text)
-- `e2522f0` — Phase 2c: AgentCard expand + token breakdown (in/out/cache_read/cache_creation)
-- `eff184c` — fix: root session completion detected via JSONL tail on boot (`end_turn` check)
+- `d479042` — Phase 2b: client-side search bar
+- `e2522f0` — Phase 2c: AgentCard expand + token breakdown
+- `eff184c` — fix: root session completion via JSONL tail on boot
 - `683f1db` — chore: untrack `__pycache__`, archive HANDOFFs
-- `bb6a12b` — feat: collapsible Active/History sections with item counts; Active always shown
+- `bb6a12b` — feat: collapsible Active/History sections with item counts
 - `59f1c6c` — feat: pop-out modal for agent event details
-- `2bac495` — refactor: rename project ccview → agentperiscope (package, CLI, state files, imports)
+- `2bac495` — refactor: rename project ccview → agentperiscope
+- `805d0b3` — chore: MIT license, README/HANDOFF update
+- `0b7a210` — feat: Phase 3 — multi-provider (Codex CLI + OpenCode)
+- `209d722` — fix: OpenCode marks aborted/stale sessions done
+- `bde889b` — fix: proper Ctrl+C; stop API; macOS service commands
+- `29a2491` — fix: remove duplicate force-include in hatchling build
+- `9656dae` — feat: `port` and `open` subcommands; URL in service-status
 
 **Repo**: `git@github.com:scheidydude/agentperiscope.git`
 
-**Verified working (Phase 1–2):**
+**Verified working:**
 - `uv run agentperiscope` launches, opens browser
-- Active / History sections collapsible with counts; Active always shown
-- Sessions that ended while agentperiscope was down appear in History on next boot
-- SQLite history survives restart
-- Search bar filters live
-- AgentCard ▼/▲ expand + **⤢ pop out** modal
-- 18/18 tests pass (`uv run pytest tests/ -q`)
-
-### Phase 3 — Not yet started
-
-See sections 3–6 for full scope.
-
----
-
-## 3. Phase 3 Scope
-
-### Goal
-
-Extend from a Claude Code-only viewer into a **multi-provider live observability viewer**. The UI should not care which provider produced an event. Claude Code behavior must not regress.
-
-### Deliverables
-
-1. Provider abstraction (`providers/base.py` interface)
-2. Claude Code provider refactor (wraps existing `watcher.py` + `transcripts.py`)
-3. Codex CLI provider (new)
-4. OpenCode provider (new)
-5. Normalized internal event model (see section 4)
-6. Provider config (YAML or dict in `config.py`)
-7. Updated UI: provider label, filter by provider, group by provider/session/agent
-8. Tests: provider interface unit tests, per-provider parser tests with fixtures, Claude Code regression tests, malformed-file tests
-9. README updates: supported providers, how to enable each, config examples, how to add a provider
+- All three providers start and report status on startup
+- Claude Code: tails `~/.claude/projects/**/*.jsonl` via watchfiles
+- Codex: tails `~/.codex/sessions/**/*.jsonl` via watchfiles
+- OpenCode: polls `~/.local/share/opencode/opencode.db` every 3s
+- Provider filter chips in UI header work
+- ProviderBadge appears on each session card
+- Active / History sections collapsible with counts
+- Sessions that ended while agentperiscope was down appear in History
+- SQLite history (`~/.claude/agentperiscope.db`) survives restart
+- OpenCode aborted sessions (`MessageAbortedError`) marked done on load
+- OpenCode stale sessions (last activity > 30 min, no clean finish) marked done
+- Ctrl+C works cleanly (cancels all provider tasks)
+- `POST /api/stop` shuts down server programmatically
+- `agentperiscope port` / `agentperiscope open` print/open the URL
+- `agentperiscope install-service` / `uninstall-service` manage macOS LaunchAgent
+- `uv tool install . --reinstall` works (duplicate force-include bug fixed)
+- 42/42 tests pass (`uv run pytest tests/ -q`)
 
 ---
 
-## 4. Normalized Event Model
+## 3. Architecture & Key Files
 
-All providers emit events that conform to this shape. No provider-specific fields leak into the UI.
+### Python (`src/agentperiscope/`)
 
+| File | Purpose |
+|---|---|
+| `config.py` | `claude_dir()`, `db_path()`, `default_provider_configs()` |
+| `model.py` | `Store`, `Session`, `Agent`, `Event`. All have `provider` field. |
+| `db.py` | SQLite schema + `_migrate()` (adds `provider` col). `load_into` → `subscribe`. |
+| `server.py` | FastAPI. `POST /api/stop` uses `app.state.shutdown`. API routes before SPA mount. |
+| `cli.py` | DB init → `load_into` → `subscribe` → start all providers. Signal handler cancels all tasks. |
+| `watcher.py` | Boot scan + live watch for Claude Code. Untouched since Phase 1. |
+| `transcripts.py` | Typed CC JSONL line models + `Tailer`. Untouched since Phase 1. |
+| `hooks.py` | Hook ingest + install/uninstall. Marker: `"agentperiscope"`. |
+| `service.py` | macOS LaunchAgent plist install/uninstall/status. |
+| `providers/base.py` | `Provider` ABC: `name`, `async run()` |
+| `providers/claude_code.py` | Wraps `Watcher`. `name = "claude-code"`. |
+| `providers/codex_cli.py` | Tails Codex JSONL. `name = "codex-cli"`. |
+| `providers/opencode.py` | Polls OpenCode SQLite. `name = "opencode"`. |
+
+### React frontend (`frontend/src/`)
+
+| File | Purpose |
+|---|---|
+| `types.ts` | `EventState`, `AgentState`, `SessionState` — all have `provider: string`. |
+| `AgentCard.tsx` | Expand + inline events + pop-out modal. |
+| `SessionView.tsx` | Session header with `ProviderBadge`. |
+| `ProviderBadge.tsx` | Colored chip: orange=Claude Code, green=Codex, sky=OpenCode. |
+| `ProviderFilter.tsx` | Toggle buttons in header; filters `sorted` by provider. |
+| `App.tsx` | `Section` (collapsible); search + provider filter; `matchesQuery`. |
+| `useStore.ts` | WS connect + reconnect + state reducer. Untouched since Phase 1. |
+
+### Tests & fixtures
+- `tests/test_transcripts.py` — 11 tests (Phase 1)
+- `tests/test_model.py` — 7 tests (Phase 1–2)
+- `tests/test_providers.py` — 24 tests (Phase 3)
+- `tests/fixtures/codex-cli/` — sample JSONL + session_index.jsonl
+- `tests/fixtures/opencode/` — SQLite fixture DB (includes aborted session)
+
+### Built output
+- `src/agentperiscope/web/` — committed. Rebuild: `cd frontend && npm run build`.
+
+---
+
+## 4. Provider Details
+
+### Claude Code (`providers/claude_code.py`)
+- Wraps `Watcher` unchanged. Default `provider="claude-code"` on all `ensure_session` calls.
+- Boot scan: subagent files before parent files (load-bearing ordering).
+- Session completion: `end_turn` from JSONL tail; 1-hour staleness fallback.
+
+### Codex CLI (`providers/codex_cli.py`)
+- Sessions at `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl`
+- Session index at `~/.codex/session_index.jsonl` → thread names
+- Session ID = last 36 chars of filename stem
+- Top-level event types used: `session_meta`, `event_msg` (user_message/agent_message), `response_item` (function_call/custom_tool_call/function_call_output)
+- No explicit session-end event. Staleness: 30 min without activity → done.
+- This provider watches **OpenAI Codex Desktop** (`~/.codex`), not a separate CLI.
+
+### OpenCode (`providers/opencode.py`)
+- SQLite at `~/.local/share/opencode/opencode.db`, polled every 3s
+- `session` table: id, directory (cwd), title (project_slug), model (JSON), time_updated
+- `message` table: role, finish, tokens, error
+- `part` table: type=text|tool|reasoning|step-finish — tool parts have `state.status`
+- Session completion signals:
+  - `finish: "stop"` on last assistant message → done
+  - `error` field on assistant message (e.g. `MessageAbortedError`) → done
+  - Last activity > 30 min and still running → done (staleness fallback)
+- Poll skips sessions where `time_updated == last_seen` (idempotent)
+- Message IDs tracked in `_msg_seen` to prevent duplicate event ingestion
+
+### Provider stamping
+All providers call `ensure_session(..., provider="<name>")`. Default is `"claude-code"` so `Watcher` (untouched) stamps correctly without code changes. The `provider` field flows through `Session.to_dict()` → WS snapshot → TypeScript `SessionState.provider`.
+
+---
+
+## 5. Shutdown Architecture
+
+Signal handler in `cli.py`:
 ```python
-@dataclass
-class NormalizedEvent:
-    provider: str          # "claude-code" | "codex-cli" | "opencode"
-    session_id: str
-    agent_id: str
-    agent_name: str | None
-    timestamp: str         # ISO 8601
-    event_type: str        # see below
-    status: str | None     # "running" | "done" | "error" | None
-    message: str | None    # human-readable content snippet
-    tool_name: str | None  # tool or command name if applicable
-    raw: dict              # original parsed source event, for debugging
+def _shutdown():
+    server.should_exit = True          # tells uvicorn to drain
+    for task in asyncio.all_tasks():   # cancels awatch + asyncio.sleep loops
+        if task is not current_task:
+            task.cancel()
+    port_file.unlink(missing_ok=True)
+
+asyncio.gather(..., return_exceptions=True)  # catches CancelledError from providers
 ```
 
-**Event types:**
-- `session_started`
-- `session_ended`
-- `agent_started`
-- `agent_updated`
-- `agent_message`
-- `tool_call_started`
-- `tool_call_output`
-- `tool_call_finished`
-- `agent_finished`
-- `error`
+`POST /api/stop` triggers the same `_shutdown` via `app.state.shutdown`.
+
+Without cancelling all tasks, Ctrl+C set `server.should_exit` but provider tasks blocked `gather` indefinitely.
 
 ---
 
-## 5. Architecture Changes
+## 6. Decisions Made (All Phases)
 
-### New files (Python)
+**Provider stamping at `ensure_session` call site, not a translation layer**
+- Reason: simplest; Watcher unchanged; default `"claude-code"` means no arg needed in watcher.py.
 
-| File | Purpose |
-|---|---|
-| `src/agentperiscope/providers/__init__.py` | Package |
-| `src/agentperiscope/providers/base.py` | `Provider` ABC: `name`, `is_enabled()`, `start(store)`, `stop()` |
-| `src/agentperiscope/providers/claude_code.py` | Wraps existing `Watcher`; emits `NormalizedEvent` |
-| `src/agentperiscope/providers/codex_cli.py` | Tails `~/.codex/sessions/` → `NormalizedEvent` |
-| `src/agentperiscope/providers/opencode.py` | Tails `~/.local/share/opencode/sessions/` → `NormalizedEvent` |
-| `src/agentperiscope/normalized.py` | `NormalizedEvent` dataclass + `event_type` constants |
+**OpenCode: poll SQLite, don't tail**
+- Reason: SQLite can't be tailed like JSONL. WAL mode means reads are safe during writes.
 
-### Modified files (Python)
+**Codex: staleness = 30 min (not 1h like Claude Code)**
+- Reason: Codex sessions are user-initiated chat threads — shorter idle window is appropriate.
 
-| File | Change |
-|---|---|
-| `config.py` | Add `providers` dict; resolve per-provider dirs; defaults overrideable |
-| `model.py` | `Event` / `Agent` / `Session` accept `provider` field; store supports multi-provider |
-| `cli.py` | Load all enabled providers; start/stop them together |
-| `watcher.py` | Internals unchanged; `claude_code.py` wraps it |
-| `db.py` | Schema migration: add `provider` column to sessions/agents/events tables |
+**OpenCode aborted sessions: `error` field → terminal**
+- Reason: `MessageAbortedError` means user cancelled. No `finish` field is emitted. Treating `error` as terminal prevents ghost "active" sessions.
 
-### Config shape (in `config.py` or `~/.config/agentperiscope/config.yaml`)
+**macOS service via LaunchAgent, not launchd system daemon**
+- Reason: User-level agent in `~/Library/LaunchAgents/` runs as the user, has access to `~/.claude`, no sudo needed.
 
-```yaml
-providers:
-  claude-code:
-    enabled: true
-    transcript_dir: "~/.claude/projects"
-    hooks_dir: "~/.claude"
+**`POST /api/stop` uses `app.state.shutdown`**
+- Reason: clean separation; server.py doesn't import cli.py; cli.py injects the callback via `fastapi_app.state.shutdown` after building the app.
 
-  codex-cli:
-    enabled: false
-    transcript_dir: "~/.codex/sessions"
-    log_dir: "~/.codex/logs"
+**DB migration via `ALTER TABLE ... ADD COLUMN ... DEFAULT`**
+- Reason: safe and idempotent (wrapped in try/except OperationalError); existing rows get `"claude-code"` default.
 
-  opencode:
-    enabled: false
-    transcript_dir: "~/.local/share/opencode/sessions"
-    log_dir: "~/.local/share/opencode/logs"
-```
-
-All paths default to the above but are overrideable. If a configured dir does not exist, the provider logs a warning and skips gracefully (never crashes the server).
-
-### New files (React frontend)
-
-| File | Purpose |
-|---|---|
-| `frontend/src/ProviderBadge.tsx` | Colored chip: "Claude Code", "Codex CLI", "OpenCode" |
-| `frontend/src/ProviderFilter.tsx` | Checkbox group; filters WS state client-side |
-
-### Modified files (React frontend)
-
-| File | Change |
-|---|---|
-| `types.ts` | Add `provider: string` to `AgentState` and `EventState` |
-| `AgentCard.tsx` | Render `ProviderBadge` next to agent name |
-| `App.tsx` | Add `ProviderFilter`; `matchesQuery` checks provider; grouping by provider |
-| `useStore.ts` | No changes expected |
+*(All Phase 1–2 decisions still apply — see git log for context.)*
 
 ---
 
-## 6. Provider Implementation Notes
+## 7. Gotchas & Hard-Won Knowledge
 
-### Claude Code (refactor, not rewrite)
+### Phase 1–2 (preserved)
+- **CC refreshes mtime on old session files at startup.** Never use mtime for staleness.
+- **`async_launched` ≠ done.** Background-dispatch signal only.
+- **`stop_reason="tool_use"` is mid-turn.** `end_turn` = complete.
+- **Root agent only in `session_start`, never `agent_start`.** `ensure_session` creates it inline.
+- **`load_into` must precede `store.subscribe(db.on_delta)`.** Order is load-bearing.
+- **`to_full_dict()` is REST-only.** Never call in WS deltas.
+- **StaticFiles mount at `/` must be last in `build_app`.**
+- **Ghost sessions from metadata-only JSONLs.** Guard: `s.cwd && s.last_activity_ts` in App.tsx.
+- **Boot scan ordering is load-bearing.** Subagent files before parent files.
+- **`createPortal` required for modal.** Overflow clipping on ancestors.
+- **`check_same_thread=False` on sqlite3.**
 
-- Extract a thin `claude_code.py` that instantiates `Watcher` and translates its `Store` deltas into `NormalizedEvent` before re-emitting.
-- Alternatively, keep `Watcher` writing directly to `Store` and add a `provider="claude-code"` tag at the point of ingestion. Simpler option — prefer this.
-- **Do not touch** `watcher.py` internals, `transcripts.py`, or the boot scan order.
-
-### Codex CLI
-
-- Investigate: `~/.codex/sessions/`, `~/.codex/logs/`. Codex CLI (OpenAI's open-source CLI tool) may write JSONL, plain text, or SQLite. Check the actual format before writing the parser.
-- If JSONL: parse structured fields. If plain text: extract timestamps + tool names with regex.
-- Be defensive: files may be actively written. Skip malformed lines; never crash.
-- Assign `session_id` from the filename or a field in the log. If unavailable, use a hash of the file path.
-
-### OpenCode
-
-- Investigate: `~/.local/share/opencode/` on Linux; may differ on macOS (`~/Library/Application Support/opencode/` or `~/.local/share/opencode/`). Check both.
-- OpenCode (sst/opencode) likely writes structured session data. Confirm format before writing the parser.
-- Same defensive parsing rules as Codex CLI.
-- Provider path should be overrideable for macOS vs Linux differences.
-
-### Investigation step (do first, before writing parsers)
-
-Run the following to find actual log locations:
-```bash
-# Codex CLI
-find ~/.codex -type f 2>/dev/null | head -30
-ls -la ~/.codex/ 2>/dev/null
-
-# OpenCode
-find ~/.local/share/opencode -type f 2>/dev/null | head -30
-find ~/Library/Application\ Support/opencode -type f 2>/dev/null | head -30
-```
-
-If neither tool is installed locally, check their GitHub repos for the session/log format before writing any parser.
+### Phase 3 (new)
+- **OpenCode `finish: null` ≠ running.** Null means the message has an `error` field (aborted). Treat `error` as terminal or you get ghost active sessions.
+- **OpenCode `session` table has `agent` column in production but not all schema versions.** Don't SELECT it — it's unused by the provider.
+- **Codex session ID is last 36 chars of filename stem**, not a split on `-`. Stems vary in length; slicing `[-36:]` is reliable.
+- **Provider tasks block `asyncio.gather` after uvicorn exits.** Must cancel all tasks in signal handler, not just set `server.should_exit`.
+- **hatchling `force-include` + `packages` both including `web/` causes duplicate path build error.** Only use `packages`; `force-include` is not needed.
+- **Provider dirs that don't exist → skip, don't crash.** Always guard with `Path.exists()` before starting a provider.
 
 ---
 
-## 7. Testing Requirements
-
-- **Provider interface:** Unit test `Provider` ABC — `start`, `stop`, `is_enabled` contracts.
-- **Claude Code regression:** Existing 18 tests must still pass. Add at least 3 regression tests confirming Claude Code provider emits correct `NormalizedEvent` types.
-- **Codex CLI parser:** Fixture-based tests with sample log snippets (real or synthesized). Test: valid JSONL, plain text fallback, partial/truncated file, empty file.
-- **OpenCode parser:** Same fixture pattern as Codex CLI.
-- **Malformed files:** Each provider parser must handle truncated lines, invalid JSON, and missing required fields without raising.
-- **DB migration:** Test that existing DB (with no `provider` column) migrates cleanly on boot.
-
-Fixture files go in `tests/fixtures/codex-cli/` and `tests/fixtures/opencode/`.
-
----
-
-## 8. Preserved Rules (Do Not Touch)
-
-Everything in Phase 1–2 "Do Not Touch" still applies:
+## 8. Do Not Touch
 
 - `src/agentperiscope/web/` — generated. Edit `frontend/src/`, then rebuild.
-- Boot scan ordering in `watcher.py:_boot_scan` — load-bearing for completion tracking.
-- `async_launched` → `"running"` in `model.py:apply_line` — correct, hard-won.
-- `ensure_session` cwd update block — removing makes metadata-only-start sessions permanently invisible.
+- Boot scan ordering in `watcher.py:_boot_scan` — load-bearing.
+- `async_launched` → `"running"` in `model.py:apply_line` — hard-won.
+- `ensure_session` cwd update block — removing breaks metadata-only-start sessions.
 - `_reconcile_stale_sessions` position — must run after all files processed.
 - Route registration order in `server.py:build_app` — API routes before `app.mount("/", ...)`.
 - `db.load_into(store)` before `store.subscribe(db.on_delta)` in `cli.py`.
+- `asyncio.gather(..., return_exceptions=True)` — needed so `CancelledError` from providers doesn't surface as failure.
 
 ---
 
-## 9. Decisions Made (All Phases)
-
-**Decision:** MIT license
-- **Reason:** Standard permissive OSS license.
-
-**Decision:** Pop-out modal uses `createPortal` to `document.body`
-- **Reason:** Avoids z-index/overflow clipping from AgentCard ancestors.
-
-**Decision:** Events fetched once per AgentCard, reused for inline and modal
-- **Reason:** No refetch needed when toggling modal.
-
-**Decision:** Collapsible sections via local `useState` in `Section` component
-- **Reason:** Ephemeral UI preference, not worth persisting.
-
-**Decision:** Active always shown (even at 0); History only when non-empty
-- **Reason:** Active is the primary view.
-
-**Decision:** Root session completion via JSONL tail read on boot
-- **Reason:** Sessions that ended while agentperiscope was down stayed "running". `end_turn` → done; 1-hour fallback for mid-turn kills.
-
-**Decision:** SQLite at `~/.claude/agentperiscope.db`, DB subscriber on Store delta stream
-- **Reason:** Store stays pure in-memory; DB is a side-effect layer.
-
-**Decision:** `db.load_into(store)` before `store.subscribe(db.on_delta)` in `cli.py`
-- **Reason:** Prevents history load from re-emitting WS deltas.
-
-**Decision:** `session_start` delta upserts all agents including root
-- **Reason:** Root agent only appears in `session_start`, never as `agent_start`.
-
-**Decision:** `/api/sessions/{id}` registered before `app.mount("/", StaticFiles(...))`
-- **Reason:** FastAPI matches routes in registration order.
-
-**Decision (Phase 3):** Provider tag added at ingestion point, not in a translation layer
-- **Reason:** Simpler than a full event translation pipeline. `Watcher` writes to `Store` with `provider="claude-code"` stamped at the call site in `cli.py`. New providers follow the same pattern.
-- **Reversibility:** Easy to refactor to a translation layer later if needed.
-
-**Decision (Phase 3):** Per-provider config defaults in `config.py`; overrideable via config file
-- **Reason:** Safe defaults for common installs; power users can override paths.
-- **Reversibility:** Easy.
-
----
-
-## 10. Gotchas & Hard-Won Knowledge (All Phases)
-
-- **CC refreshes mtime on old session files at startup.** Never use file mtime for staleness.
-- **`async_launched` ≠ done.** Background-dispatch signal only.
-- **`stop_reason="tool_use"` is mid-turn.** `end_turn` = complete.
-- **Root agent only emitted in `session_start`, never as `agent_start`.** `ensure_session` creates it inline.
-- **`load_into` must precede `store.subscribe(db.on_delta)`.**
-- **`check_same_thread=False` on sqlite3.**
-- **`to_full_dict()` is REST-only.** Never call in WS deltas.
-- **StaticFiles mount at `/` must be last in `build_app`.**
-- **Hundreds of ghost sessions from metadata-only JSONLs.** Guard: `s.cwd && s.last_activity_ts` in `App.tsx`.
-- **Boot scan ordering is load-bearing.**
-- **`createPortal` required for modal.**
-- **Phase 3 (new):** Log directories for Codex CLI and OpenCode may not exist on all machines. Always guard with `Path.exists()` before setting up watchers. Never fail the server startup if a provider dir is missing.
-- **Phase 3 (new):** Codex CLI and OpenCode log formats are not yet confirmed. Investigate before writing parsers. Do not assume JSONL.
-
----
-
-## 11. Conventions In Play
+## 9. Conventions In Play
 
 - **Python 3.12, `uv` toolchain, hatchling.** `uv sync` → `uv run agentperiscope`. Tests: `uv run pytest tests/ -q`. sqlite3 is stdlib.
-- **Frontend:** React + Vite + TypeScript + Tailwind. `cd frontend && npm run build` → `src/agentperiscope/web/`. Built output committed in the wheel.
-- **No raw content persisted.** `last_text` = 200-char snippet. Full transcript stays in JSONL.
+- **Frontend:** React + Vite + TypeScript + Tailwind. `cd frontend && npm run build` → `src/agentperiscope/web/`. Built output committed in wheel.
+- **Reinstall:** `uv tool install . --reinstall`. With service: add `launchctl kickstart -k gui/$(id -u)/com.agentperiscope`.
+- **No raw content persisted.** `last_text` = 200-char snippet.
 - **Schema drift tolerance.** Unknown line types → `UnknownLine`. Never crash on parse.
 - **No comments unless WHY is non-obvious.**
-- **Commits:** conventional (`feat:`, `fix:`, `chore:`), imperative subject, body explains why not what.
+- **Commits:** conventional (`feat:`, `fix:`, `chore:`), imperative subject.
 
 ---
 
-## 12. Open Questions
+## 10. Open Questions
 
-1. **Codex CLI log format** — JSONL, plain text, or SQLite? Must confirm before writing parser.
-2. **OpenCode log format** — same question. Check `~/.local/share/opencode/` on Linux and `~/Library/Application Support/opencode/` on macOS.
-3. **DB migration strategy** — add `provider` column with `ALTER TABLE` + default `"claude-code"` for existing rows, or recreate schema. Prefer ALTER + default.
-4. **Provider filter UX** — checkbox group in header or sidebar? TBD.
-5. **No event persistence yet.** Pop-out modal shows nothing for historical sessions (prior run). Still open from Phase 2.
+1. **No event persistence.** Pop-out modal shows nothing for sessions from prior runs. Still open from Phase 2.
+2. **No tests for DB, search, expand, modal.** Phase 2 features untested at unit level.
+3. **OpenCode subagents.** OpenCode has agent/subagent concepts (`parent_id` on session table). Not yet wired up — all activity maps to root agent only.
+4. **Codex multi-turn token counts.** Token data is in `event_msg` with `rate_limits` payload — not yet parsed into `agent.tokens`.
 
 ---
 
-## 13. Resume Command
+## 11. Resume Command
 
-> "Read HANDOFF.md. Phase 1 and 2 complete. Phase 3 is multi-provider support (Claude Code + Codex CLI + OpenCode). Start by investigating Codex CLI and OpenCode log formats (see section 6 investigation step) before writing any parsers. Then implement the provider abstraction (section 5), normalized event model (section 4), and new providers. Do not touch watcher.py internals, transcripts.py, or route ordering in server.py without reading sections 8 and 10. Run `uv run pytest tests/ -q` after any Python changes."
+> "Read HANDOFF.md. Phase 1, 2, and 3 complete. Three providers: Claude Code (watchfiles JSONL), Codex (watchfiles JSONL, `~/.codex`), OpenCode (SQLite poll, `~/.local/share/opencode`). Do not touch `watcher.py`, `transcripts.py`, boot scan ordering, or route registration order without reading sections 7 and 8. Run `uv run pytest tests/ -q` after any Python change. Run `cd frontend && npm run build` after any frontend change, then `uv tool install . --reinstall` to package."

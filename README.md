@@ -31,6 +31,15 @@ Opens `http://127.0.0.1:<auto-port>` in your browser. Binds loopback only.
 --no-opencode       Disable OpenCode provider
 ```
 
+### Find the URL
+
+```sh
+agentperiscope port    # prints http://127.0.0.1:XXXXX
+agentperiscope open    # prints URL and opens browser
+```
+
+The raw port is also in `~/.claude/agentperiscope.port`.
+
 ### Stop
 
 Press **Ctrl+C** in the terminal, or from anywhere:
@@ -52,7 +61,8 @@ Logs go to `~/Library/Logs/agentperiscope/`. Manage without uninstalling:
 ```sh
 launchctl stop com.agentperiscope    # stop
 launchctl start com.agentperiscope   # start
-agentperiscope service-status        # show launchctl status
+agentperiscope service-status        # show launchctl status + URL
+agentperiscope open                  # open browser to running instance
 ```
 
 Remove the service:
