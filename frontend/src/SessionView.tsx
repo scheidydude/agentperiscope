@@ -15,12 +15,30 @@ function shortCwd(cwd: string) {
   return parts.slice(-2).join('/')
 }
 
+function fmtSessionTs(ts: string): string {
+  if (!ts) return ''
+  try {
+    const d = new Date(ts)
+    if (isNaN(d.getTime())) return ''
+    const now = new Date()
+    const isToday = d.toDateString() === now.toDateString()
+    const isThisYear = d.getFullYear() === now.getFullYear()
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (isToday) return time
+    const date = d.toLocaleDateString([], { month: 'short', day: 'numeric', ...(!isThisYear && { year: 'numeric' }) })
+    return `${date} · ${time}`
+  } catch {
+    return ''
+  }
+}
+
 export function SessionView({ session }: Props) {
   const rootAgent = session.agents[session.root_agent_id]
   const subagents = Object.values(session.agents).filter(
     (a) => a.id !== session.root_agent_id
   )
   const hasRunning = Object.values(session.agents).some((a) => a.status === 'running')
+  const ts = fmtSessionTs(session.last_activity_ts)
 
   return (
     <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-4">
@@ -32,7 +50,10 @@ export function SessionView({ session }: Props) {
         </span>
         <div className="ml-auto flex items-center gap-2 flex-shrink-0">
           <ProviderBadge provider={session.provider ?? 'claude-code'} />
-          <span className="font-mono text-xs text-zinc-500">
+          {ts && (
+            <span className="font-mono text-xs text-zinc-400">{ts}</span>
+          )}
+          <span className="font-mono text-xs text-zinc-600" title={session.id}>
             {shortId(session.id)}
           </span>
           {session.model && (
