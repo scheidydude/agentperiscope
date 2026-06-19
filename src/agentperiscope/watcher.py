@@ -151,7 +151,7 @@ class Watcher:
                 continue
             root = session.agents.get(session_id)
             if root and root.status == "running":
-                self._reconcile_one_root(path, root, session, now)
+                self._reconcile_one_root(path, root, session, now, now_ts)
 
         # --- async subagents (async_launched → running, may now be done) ---
         for path, meta in self._subagent_meta.items():
@@ -165,9 +165,14 @@ class Watcher:
             self._reconcile_one_subagent(path, agent, now_ts)
 
     def _reconcile_one_root(
-        self, path: Path, root: "Agent", session: "Session", now: datetime  # type: ignore[name-defined]
+        self, path: Path, root: "Agent", session: "Session", now: datetime, now_ts: float  # type: ignore[name-defined]
     ) -> None:
         """Read tail of root JSONL; mark done on end_turn or 1h staleness fallback."""
+        try:
+            file_is_old = now_ts - path.stat().st_mtime > 3600  # >1h unchanged
+        except OSError:
+            file_is_old = False
+
         tail = _read_tail_lines(path)
         for line_bytes in reversed(tail):
             parsed = parse_line(line_bytes)
@@ -176,11 +181,16 @@ class Watcher:
                     root.status = "done"
                     root.current_tool = None
                     session.status = "done"
+                elif file_is_old:
+                    # mid-tool-use stop + old file = died spawning subagents
+                    root.status = "done"
+                    root.current_tool = None
+                    session.status = "done"
                 # else: mid-turn stop — fall through to time-based check
                 break
         else:
-            # No AssistantLine at all — metadata-only session
-            if not session.last_activity_ts:
+            # No AssistantLine at all — metadata-only or empty session
+            if not session.last_activity_ts or file_is_old:
                 root.status = "done"
                 session.status = "done"
                 return
