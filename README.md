@@ -4,6 +4,8 @@
 
 Local live observability viewer for AI agent activity. Tails session transcripts from Claude Code, Codex, and OpenCode, then renders a live per-agent view in the browser.
 
+[![agentperiscope][agentperiscope.image]](https://github.com/scheidydude/agentperiscope)
+
 ## Install
 
 ```sh
@@ -206,3 +208,4 @@ Claude Code on native Windows writes to `%USERPROFILE%\.claude`; inside WSL it w
 ```sh
 agentperiscope --claude-dir /mnt/c/Users/YourName/.claude
 ```
+[agentperiscope.image]: images/screenshot.png
