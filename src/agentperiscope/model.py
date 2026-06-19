@@ -187,11 +187,17 @@ class Store:
             self._sessions[session_id] = session
             self._emit({"type": "session_start", "session": session.to_dict()})
         else:
-            # Update cwd/slug once we learn them (first lines may be metadata-only)
             sess = self._sessions[session_id]
             if cwd and not sess.cwd:
                 sess.cwd = cwd
                 sess.project_slug = project_slug
+            # Re-activate if new content arrives for a session marked done
+            if sess.status == "done":
+                sess.status = "running"
+                root = sess.agents.get(session_id)
+                if root:
+                    root.status = "running"
+                self._emit({"type": "session_update", "session": sess.to_dict()})
         return self._sessions[session_id]
 
     def ensure_agent(
