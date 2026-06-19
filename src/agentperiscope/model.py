@@ -165,6 +165,9 @@ class Store:
     def get_session(self, session_id: str) -> Session | None:
         return self._sessions.get(session_id)
 
+    def all_sessions(self) -> list[Session]:
+        return list(self._sessions.values())
+
     def ensure_session(self, session_id: str, cwd: str, project_slug: str, provider: str = "claude-code") -> Session:
         if session_id not in self._sessions:
             agent = Agent(
@@ -187,18 +190,22 @@ class Store:
             self._sessions[session_id] = session
             self._emit({"type": "session_start", "session": session.to_dict()})
         else:
+            # Update cwd/slug once we learn them (first lines may be metadata-only)
             sess = self._sessions[session_id]
             if cwd and not sess.cwd:
                 sess.cwd = cwd
                 sess.project_slug = project_slug
-            # Re-activate if new content arrives for a session marked done
-            if sess.status == "done":
-                sess.status = "running"
-                root = sess.agents.get(session_id)
-                if root:
-                    root.status = "running"
-                self._emit({"type": "session_update", "session": sess.to_dict()})
         return self._sessions[session_id]
+
+    def reactivate_session(self, session_id: str) -> None:
+        """Re-activate a done session when new incremental content arrives."""
+        sess = self._sessions.get(session_id)
+        if sess and sess.status == "done":
+            sess.status = "running"
+            root = sess.agents.get(session_id)
+            if root:
+                root.status = "running"
+            self._emit({"type": "session_update", "session": sess.to_dict()})
 
     def ensure_agent(
         self,

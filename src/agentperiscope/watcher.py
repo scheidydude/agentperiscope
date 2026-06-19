@@ -139,7 +139,14 @@ class Watcher:
         now = datetime.now(timezone.utc)
         now_ts = time.time()
 
-        # --- root agents ---
+        # Build set of session IDs that have a JSONL file on disk
+        known_session_ids = {
+            _session_id_from_path(p)
+            for p in self._tailers
+            if not _is_subagent_jsonl(p)
+        }
+
+        # --- root agents with a file on disk ---
         for path, tailer in self._tailers.items():
             if _is_subagent_jsonl(path):
                 continue
@@ -147,11 +154,25 @@ class Watcher:
             if not session_id:
                 continue
             session = self._store.get_session(session_id)
-            if not session:
+            if not session or session.status != "running":
                 continue
             root = session.agents.get(session_id)
-            if root and root.status == "running":
+            if root:
                 self._reconcile_one_root(path, root, session, now, now_ts)
+                if session.status == "done":
+                    self._store._emit({"type": "session_update", "session": session.to_dict()})
+
+        # --- sessions in DB/store with no JSONL file → mark done ---
+        for session in self._store.all_sessions():
+            if session.status != "running":
+                continue
+            if session.id in known_session_ids:
+                continue
+            session.status = "done"
+            root = session.agents.get(session.id)
+            if root:
+                root.status = "done"
+            self._store._emit({"type": "session_update", "session": session.to_dict()})
 
         # --- async subagents (async_launched → running, may now be done) ---
         for path, meta in self._subagent_meta.items():
@@ -321,6 +342,8 @@ class Watcher:
         else:
             session_id = _session_id_from_path(path)
             if session_id:
+                if pairs:
+                    self._store.reactivate_session(session_id)
                 for line, ref in pairs:
                     cwd = line.cwd if isinstance(line, (AssistantLine, UserLine)) else ""
                     self._store.ensure_session(session_id, cwd, slug)
